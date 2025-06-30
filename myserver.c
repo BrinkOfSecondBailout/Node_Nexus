@@ -147,7 +147,6 @@ File *read_file(char *file_name) {
 	f->fd = open(file_name, O_RDONLY);
 
 	if (f->fd < 0) {
-
 		fprintf(stderr, "read_file: Failed to open %s: %s\n", file_name, strerror(errno));
 		error = "read_file() open failure";
 		free(f);
@@ -155,7 +154,6 @@ File *read_file(char *file_name) {
 	}
 	struct stat st;
 	if (fstat(f->fd, &st) < 0) {
-
 		fprintf(stderr, "read_file: Failed to stat %s: %s\n", file_name, strerror(errno));
 		error = "read_file() fstat failure";
 		close(f->fd);
@@ -379,8 +377,6 @@ char *read_client_body(int cli_fd, char *p) {
 			if (!body) {
 				error = "cli_connection body malloc failure";
 				free(p);
-				
-			
 				return 0;
 			}
 			size_t body_read = 0;

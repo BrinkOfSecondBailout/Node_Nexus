@@ -2,16 +2,36 @@
 
 body {
 	font-family: Arial, sans-serif;
+	font-size: 14px;
 	background-color: #f0f0f0;
 	text-align: center;
+	width: 100%;
 }
 h1 {
         color: #333;
 }
 
-#btc-picture {
+#main-body {
+	margin: auto;
+	text-align: center;
+	padding: 10px;
+	width: 100%;
+}
+
+#main-form-div {
+	padding: 10px;
+}
+
+#current_bio {
+	font-size: 16px;
+	font-weight: bold;
+	padding: 10px;
+}
+
+#dbz-picture {
 	width: 400px;
 	height: 250px;
+	border-radius: 10px;
 }
 
 button {
