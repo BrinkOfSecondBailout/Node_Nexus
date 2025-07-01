@@ -1,42 +1,12 @@
 /* myserver.c */
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <signal.h>
 
-#define MAX_CONNECTIONS 50
-
-#define METHOD_LENGTH 8
-#define URL_LENGTH 128
-#define LOCAL_HOST "127.0.0.1"
+#include "myserver.h"
 
 static volatile int keep_running = 1;
 
 int active_connections = 0;
 
 char *error;
-struct http_request {
-	char method[METHOD_LENGTH];
-	char url[URL_LENGTH];
-};
-
-typedef struct http_request http_req;
-
-struct sFile {
-	char file_name[64];
-	int fd;
-	off_t size;
-};
-
-typedef struct sFile File;
 
 static char stored_name[256] = "John Doe";
 static int stored_age = 30;
