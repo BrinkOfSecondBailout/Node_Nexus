@@ -1,6 +1,8 @@
 /* myserver.c */
 
 #include "myserver.h"
+#include "database.h"
+
 
 static volatile int keep_running = 1;
 
@@ -76,8 +78,9 @@ int cli_accept(int serv_fd) {
 	return cli_fd;
 }
 
-void http_headers(int cli_fd, int code) {
+int http_headers(int cli_fd, int code) {
 	char buf[512];
+	ssize_t bytes;
 	memset(buf, 0, sizeof(buf));
 
 	snprintf(buf, 511,
@@ -88,11 +91,17 @@ void http_headers(int cli_fd, int code) {
 			"Expires: -1\r\n"
 			"X-Frame-Options: SAMEORIGIN\r\n",
 			code, code == 200 ? "OK" : code == 404 ? "Not Found" : code == 400 ? "Bad Request" : "Internal Server Error");
-	write(cli_fd, buf, strlen(buf));
+	bytes = write(cli_fd, buf, strlen(buf));
+	if (bytes == -1) {
+		error = "http_headers() write() failure";
+		return 0;
+	}
+	return 1;
 }
 
-void http_response(int cli_fd, char *content_type, char *data) {
+int http_response(int cli_fd, char *content_type, char *data) {
 	char buf[2048];
+	ssize_t bytes;
 	memset(buf, 0, sizeof(buf));
 	int n = strlen(data);
 
@@ -102,7 +111,12 @@ void http_response(int cli_fd, char *content_type, char *data) {
 			"Content-Length: %d\r\n\r\n"
 			"%s",
 			content_type, n, data);
-	write(cli_fd, buf, strlen(buf));
+	bytes = write(cli_fd, buf, strlen(buf));
+	if (bytes == -1) {
+		error = "http_response() write() failure";
+		return 0;
+	}
+	return 1;
 }
 
 File *read_file(char *file_name) {
@@ -382,7 +396,7 @@ char *read_client_body(int cli_fd, char *p) {
 
 int cli_connection(int cli_fd) {	
 	http_req *req;
-	char *res;
+	// char *res;
 	char str[96];
 	File *f;
 	char *body = NULL;
@@ -413,11 +427,15 @@ int cli_connection(int cli_fd) {
 				"<html><body><h1>Submitted Data</h1><p>%s</p><a href='/'>Back</a></body></html>"
 				, sanitized);
 
-			http_headers(cli_fd, 200);
-			http_response(cli_fd, "text/html", buf);
+			if (!http_headers(cli_fd, 200))
+				fprintf(stderr, "%s\n", error);			
+			if (!http_response(cli_fd, "text/html", buf))
+				fprintf(stderr, "%s\n", error);
 		} else {
-			http_headers(cli_fd, 400);
-			http_response(cli_fd, "text/plain", "No data submitted");
+			if (!http_headers(cli_fd, 400))
+				fprintf(stderr, "%s\n", error);
+			if (!http_response(cli_fd, "text/plain", "No data submitted"))
+				fprintf(stderr, "%s\n", error);
 		}
 		clean_up(cli_fd, body, p, req, NULL);
 		return 1;
@@ -429,8 +447,10 @@ int cli_connection(int cli_fd) {
 		memset(str, 0, sizeof(str));
 		snprintf(str, sizeof(str) - 1, "%s", req->url + 1);
 		if (strstr(str, "..")) {
-			http_headers(cli_fd, 403);
-			http_response(cli_fd, "text/plain", "Forbidden");
+			if (!http_headers(cli_fd, 403))
+				fprintf(stderr, "%s\n", error);
+			if (!http_response(cli_fd, "text/plain", "Forbidden"))
+				fprintf(stderr, "%s\n", error);
 			clean_up(cli_fd, req, NULL);
 			return 0;
 		}
@@ -438,15 +458,19 @@ int cli_connection(int cli_fd) {
 		if (!f) {
 			fprintf(stderr, "Failed to read file: %s (%s)\n", str, error);
 			
-			http_headers(cli_fd, 404);
-			http_response(cli_fd, "text/plain", "File not found");
+			if (!http_headers(cli_fd, 404))
+				fprintf(stderr, "%s\n", error);
+			if (!http_response(cli_fd, "text/plain", "File not found"))
+				fprintf(stderr, "%s\n", error);
 		} else {
 			char *mime_type = get_mime_type(req->url);
 			fprintf(stderr, "Serving file %s with MIME type %s\n", str, mime_type);
 			
 			if (!send_file(cli_fd, mime_type, f)) {
-				http_headers(cli_fd, 500);
-				http_response(cli_fd, "text/plain", "Server error");
+				if (!http_headers(cli_fd, 500))
+					fprintf(stderr, "%s\n", error);
+				if (!http_response(cli_fd, "text/plain", "Server error"))
+					fprintf(stderr, "%s\n", error);
 				if (f->fd >= 0) close(f->fd);
 				free(f);
 			}
@@ -456,13 +480,17 @@ int cli_connection(int cli_fd) {
 	else if (!strcmp(req->method, "GET") && !strcmp(req->url, "/")) {	
 		File *f = read_file("index.html");
 		if (!f) {
-			http_headers(cli_fd, 404);
-			http_response(cli_fd, "text/plain", "File not found");	
+			if (!http_headers(cli_fd, 404))
+				fprintf(stderr, "%s\n", error);
+			if (!http_response(cli_fd, "text/plain", "File not found"))
+				fprintf(stderr, "%s\n", error);
 		} else {
 			char *mime_type = get_mime_type("index.html");
 			if (!send_file(cli_fd, mime_type, f)) {
-				http_headers(cli_fd, 500);
-				http_response(cli_fd, "text/plain", "Server error");
+				if (!http_headers(cli_fd, 500))
+					fprintf(stderr, "%s\n", error);
+				if (!http_response(cli_fd, "text/plain", "Server error"))
+					fprintf(stderr, "%s\n", error);
 				if (f->fd >= 0) close(f->fd);
 				free(f);
 			}
@@ -474,13 +502,17 @@ int cli_connection(int cli_fd) {
 		if (!strcmp(req->method, "DELETE")) {
 			strcpy(stored_name, "John Doe");
 			stored_age = 30;
-			http_headers(cli_fd, 200);
-			http_response(cli_fd, "text/plain", "User data deleted");
+			if (!http_headers(cli_fd, 200))
+				fprintf(stderr, "%s\n", error);
+			if (!http_response(cli_fd, "text/plain", "User data deleted"))
+				fprintf(stderr, "%s\n", error);
 		} else {
 			body = read_client_body(cli_fd, p);		
 			if (!body) {
-				http_headers(cli_fd, 400);
-				http_response(cli_fd, "text/plain", "No new input provided");
+				if (!http_headers(cli_fd, 400))
+					fprintf(stderr, "%s\n", error);
+				if (!http_response(cli_fd, "text/plain", "No new input provided"))
+					fprintf(stderr, "%s\n", error);
 				clean_up(cli_fd, p, req, NULL);
 				return 0;
 			}
@@ -506,8 +538,12 @@ int cli_connection(int cli_fd) {
 				char *age_end = strchr(age_start, '&');
 				size_t age_len = age_end ? (size_t)(age_end - age_start) : strlen(age_start);
 				if (age_len > 10) {
-					http_headers(cli_fd, 400);
-					http_response(cli_fd, "text/plain", "Invalid age format");
+					if (!http_headers(cli_fd, 400))
+
+						fprintf(stderr, "%s\n", error);
+					if (!http_response(cli_fd, "text/plain", "Invalid age format"))
+
+						fprintf(stderr, "%s\n", error);
 					clean_up(cli_fd, body, p, req, NULL);
 					return 0;
 				}
@@ -515,8 +551,12 @@ int cli_connection(int cli_fd) {
 
 			}
 			if (!name_start && !age_start) {
-				http_headers(cli_fd, 400);
-				http_response(cli_fd, "text/plain", "Invalid data format");
+				if (!http_headers(cli_fd, 400))
+
+					fprintf(stderr, "%s\n", error);
+				if (!http_response(cli_fd, "text/plain", "Invalid data format"))
+
+					fprintf(stderr, "%s\n", error);
 				clean_up(cli_fd, body, p, req, NULL);
 				return 0;
 			}
@@ -538,14 +578,18 @@ int cli_connection(int cli_fd) {
 			char buf[1024];
 		
 			snprintf(buf, sizeof(buf), "{\"name\":\"%s\",\"age\":%d}", sanitized_name, stored_age);
-			http_headers(cli_fd, 200);
-			http_response(cli_fd, "application/json", buf);
+			if (!http_headers(cli_fd, 200))
+				fprintf(stderr, "%s\n", error);
+			if (!http_response(cli_fd, "application/json", buf))
+				fprintf(stderr, "%s\n", error);
 		}
 	}	
 	
 	else {
-		http_headers(cli_fd, 404);
-		http_response(cli_fd, "text/plain", "Page Not Found");
+		if (!http_headers(cli_fd, 404))
+				fprintf(stderr, "%s\n", error);
+		if (!http_response(cli_fd, "text/plain", "Page Not Found"))
+				fprintf(stderr, "%s\n", error);
 	}
 
 	clean_up(cli_fd, body, p, req, NULL);
@@ -553,6 +597,12 @@ int cli_connection(int cli_fd) {
 }
 
 int main(int argc, char *argv[]) {
+	Tree *root = create_root_node();
+	print_tree(root);
+	return 0;
+
+
+
 	struct sigaction sa;
 	sa.sa_handler = sigint_handler;
 	sa.sa_flags = 0;
