@@ -14,6 +14,18 @@
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
 
+#define Print(x)						\
+	zero(buf, 256);						\
+	strncpy((char *)buf, (char *)(x), 255);			\
+	size = (int16)strlen((char *)buf);			\
+	if (size) {						\
+		bytes = write(fd, (char *)buf, size);		\
+		if (bytes == -1) {				\
+			fprintf(stderr, "Print() failure");	\
+			return;					\
+		}						\
+	}							\
+
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
 
@@ -36,8 +48,11 @@ struct s_leaf {
 };
 
 void zero(char *, int16);
+char *indent(char);
+void print_tree(int, Node *);
 Node *create_root_node();
 Node *create_new_node(Node *, char *);
+Leaf *find_first_leaf(Node *);
 Leaf *find_last_leaf_linear(Node *);
 Leaf *create_new_leaf(Node *, char *, char *, int16);
 void print_node(Node *);

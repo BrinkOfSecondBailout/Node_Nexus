@@ -10,6 +10,54 @@ void zero(char *buf, int16 size) {
 	return;
 }
 
+char *indent(char n) {
+	int16 i;
+	static char buf[256];
+	char *p;
+	if (n < 1)
+		return (char *)"";
+	assert(n < 120);
+	zero(buf, 256);
+	for (i = 0, p = buf; i < n; i++, p+=2)
+		strncpy((char *)p, "  ", 2);
+	return buf;
+}
+
+void print_tree(int fd, Node *root) {
+	assert(root);
+	char indentation;
+	char buf[256];
+	int16 size;
+	ssize_t bytes;
+	Node *n;
+	Leaf *l, *first;
+
+	indentation = 0;
+	for (n = root; n; n = n->left) {
+		Print(indent(indentation++));
+		Print(n->path);
+		Print("\n");
+		if (n->right) {
+			first = find_first_leaf(n);
+			if (first) {
+				for (l = first; l; l = l->right) {
+					Print(indent(indentation));
+					Print(n->path);
+					Print("/");
+					Print(l->key);
+					Print(" -> '");
+					bytes = write(fd, (char *)l->value, (int)l->size);
+					if (bytes == -1) {
+						fprintf(stderr, "print_tree() failure");
+						return;
+					}
+					Print("'\n");
+				}
+			}
+		}
+	}	
+}
+
 Node *create_root_node() {
 	Node *root = malloc(sizeof(Node));
 	if (!root) {
@@ -45,10 +93,25 @@ Node *create_new_node(Node *parent, char *path) {
 	n->left = NULL;
 	n->right = NULL; 
 
-	snprintf(temp_path, MAX_PATH_LEN, "%s%s", parent->path, path);
+	if (!strcmp(parent->path, "/")) {
+		snprintf(temp_path, MAX_PATH_LEN, "%s", path);
+	} else {
+		snprintf(temp_path, MAX_PATH_LEN, "%s%s", parent->path, path);
+	}
+
 	strncpy(n->path, temp_path, MAX_PATH_LEN - 1);
 	n->path[MAX_PATH_LEN - 1] = '\0';
 	return n;
+}
+
+Leaf *find_first_leaf(Node *parent) {
+	Leaf *l;
+	assert(parent);
+	if (!parent->right)
+		return (Leaf *)0;
+	l = parent->right;
+	assert(l);
+	return l;
 }
 
 Leaf *find_last_leaf_linear(Node *parent) {

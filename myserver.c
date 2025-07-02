@@ -598,13 +598,15 @@ int cli_connection(int cli_fd) {
 
 int main(int argc, char *argv[]) {
 	Node *root = create_root_node();
-	Node *node = create_new_node(root, "users/");
+	Node *node = create_new_node(root, "/users");
+	Node *node2 = create_new_node(node, "/login");
 	char *val = "duong";
+	char *val2 = "riley";
 
-	Leaf *leaf = create_new_leaf(node, "danny", val, (int16)strlen(val));
-	print_node(root);
-	print_node(node);
-	print_leaf(leaf);
+	Leaf *leaf = create_new_leaf(node2, "danny", val, (int16)strlen(val));
+	Leaf *leaf2 = create_new_leaf(node2, "lindsey", val2, (int16)strlen(val2));
+
+	print_tree(1, root);
 	return 0;
 
 
