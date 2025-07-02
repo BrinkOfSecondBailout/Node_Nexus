@@ -147,6 +147,24 @@ Leaf *create_new_leaf(Node *parent, char *key, char *value, int16 count) {
 	return new;
 }
 
+Leaf *find_leaf_linear(Node *root, char *key) {
+	Node *n;
+	Leaf *l;
+	Leaf *ret = (Leaf *)0;
+	for (n = root; n; n = n->left) {
+		l = find_first_leaf(n);
+		while (l) {
+			if (!strcmp(l->key, key)) {
+				ret = l;
+				break;
+			}
+			l = l->right;
+		}
+	}
+
+	return ret;
+}
+
 void print_node(Node *n) {
 	if (!n) {
 		printf("Invalid node\n");

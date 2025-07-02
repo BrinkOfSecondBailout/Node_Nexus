@@ -608,7 +608,10 @@ int main(int argc, char *argv[]) {
 	Leaf *leaf2 = create_new_leaf(node2, "lindsey", val2, (int16)strlen(val2));
 	Leaf *leaf3 = create_new_leaf(node, "shawn", val3, (int16)strlen(val3));
 
-	print_tree(1, root);
+//	print_tree(1, root);
+	
+	print_leaf(find_leaf(root, "shawn"));
+	
 	return 0;
 
 
