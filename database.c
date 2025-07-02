@@ -18,8 +18,8 @@ char *indent(char n) {
 		return (char *)"";
 	assert(n < 120);
 	zero(buf, 256);
-	for (i = 0, p = buf; i < n; i++, p+=2)
-		strncpy((char *)p, "  ", 2);
+	for (i = 0, p = buf; i < n; i++, p+=3)
+		strncpy((char *)p, "   ", 3);
 	return buf;
 }
 
@@ -34,7 +34,7 @@ void print_tree(int fd, Node *root) {
 
 	indentation = 0;
 	for (n = root; n; n = n->left) {
-		Print(indent(indentation++));
+		Print(indent(indentation));
 		Print(n->path);
 		Print("\n");
 		if (n->right) {
@@ -43,7 +43,7 @@ void print_tree(int fd, Node *root) {
 				for (l = first; l; l = l->right) {
 					Print(indent(indentation));
 					Print(n->path);
-					Print("/ >> ");
+					Print("/..");
 					Print(l->key);
 					Print(" -> '");
 					bytes = write(fd, (char *)l->value, (int)l->size);
@@ -55,7 +55,9 @@ void print_tree(int fd, Node *root) {
 				}
 			}
 		}
-	}	
+		indentation++;
+	}
+	printf("\n");
 }
 
 Node *create_root_node() {
@@ -94,9 +96,9 @@ Node *create_new_node(Node *parent, char *path) {
 	n->right = NULL; 
 
 	if (!strcmp(parent->path, "/")) {
-		snprintf(temp_path, MAX_PATH_LEN, "%s", path);
+		snprintf(temp_path, MAX_PATH_LEN, "/%s", path);
 	} else {
-		snprintf(temp_path, MAX_PATH_LEN, "%s%s", parent->path, path);
+		snprintf(temp_path, MAX_PATH_LEN, "%s/%s", parent->path, path);
 	}
 
 	strncpy(n->path, temp_path, MAX_PATH_LEN - 1);
