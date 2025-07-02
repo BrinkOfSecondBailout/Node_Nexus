@@ -17,6 +17,7 @@
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
 #define find_leaf(x, y)			find_leaf_linear(x, y)
+#define find_node(x, y)			find_node_linear(x, y)
 
 #define Print(x)						\
 	zero(buf, 256);						\
@@ -59,6 +60,7 @@ Node *create_new_node(Node *, char *);
 Leaf *find_first_leaf(Node *);
 Leaf *find_last_leaf_linear(Node *);
 Leaf *create_new_leaf(Node *, char *, char *, int16);
+Node *find_node_linear(Node *, char *);
 Leaf *find_leaf_linear(Node *, char *);
 void print_node(Node *);
 void print_leaf(Leaf *);

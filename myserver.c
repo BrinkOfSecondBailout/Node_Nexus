@@ -600,6 +600,7 @@ int main(int argc, char *argv[]) {
 	Node *root = create_root_node();
 	Node *node = create_new_node(root, "/users");
 	Node *node2 = create_new_node(node, "/login");
+	Node *node3 = create_new_node(node2, "/temp");
 	char *val = "duong";
 	char *val2 = "riley";
 	char *val3 = "lewis";
@@ -610,8 +611,10 @@ int main(int argc, char *argv[]) {
 
 //	print_tree(1, root);
 	
-	print_leaf(find_leaf(root, "shawn"));
-	
+//	print_leaf(find_leaf(root, "shawn"));
+
+	print_node(find_node(root, "/temp"));
+
 	return 0;
 
 

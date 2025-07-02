@@ -161,9 +161,21 @@ Leaf *find_leaf_linear(Node *root, char *key) {
 			l = l->right;
 		}
 	}
-
 	return ret;
 }
+
+Node *find_node_linear(Node *root, char *path) {
+	Node *n;
+	Node *ret = (Node *)0;
+	for (n = root; n; n = n->left) {
+		if (strstr(n->path, path)) {
+			ret = n;
+			break;
+		}
+	}
+	return ret;
+}
+
 
 void print_node(Node *n) {
 	if (!n) {
