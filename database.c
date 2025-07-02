@@ -43,7 +43,7 @@ void print_tree(int fd, Node *root) {
 				for (l = first; l; l = l->right) {
 					Print(indent(indentation));
 					Print(n->path);
-					Print("/");
+					Print("/ >> ");
 					Print(l->key);
 					Print(" -> '");
 					bytes = write(fd, (char *)l->value, (int)l->size);
@@ -177,4 +177,4 @@ void print_leaf(Leaf *l) {
 
 
 
-
+#pragma GCC diagnostic pop

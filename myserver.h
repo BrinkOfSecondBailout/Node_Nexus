@@ -13,6 +13,12 @@
 #include <stdarg.h>
 #include <signal.h>
 
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wunused-result"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
+#pragma GCC diagnostic push
+
 #define MAX_CONNECTIONS 50
 
 #define METHOD_LENGTH 8

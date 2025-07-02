@@ -9,6 +9,9 @@
 #include <string.h>
 #include <assert.h>
 
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic push
+
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
 

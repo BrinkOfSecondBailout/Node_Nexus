@@ -602,9 +602,11 @@ int main(int argc, char *argv[]) {
 	Node *node2 = create_new_node(node, "/login");
 	char *val = "duong";
 	char *val2 = "riley";
+	char *val3 = "lewis";
 
 	Leaf *leaf = create_new_leaf(node2, "danny", val, (int16)strlen(val));
 	Leaf *leaf2 = create_new_leaf(node2, "lindsey", val2, (int16)strlen(val2));
+	Leaf *leaf3 = create_new_leaf(node, "shawn", val3, (int16)strlen(val3));
 
 	print_tree(1, root);
 	return 0;
@@ -661,3 +663,6 @@ int main(int argc, char *argv[]) {
 	return 0;
 
 }
+
+
+#pragma GCC diagnostic pop
