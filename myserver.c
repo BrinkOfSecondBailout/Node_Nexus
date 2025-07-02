@@ -597,8 +597,14 @@ int cli_connection(int cli_fd) {
 }
 
 int main(int argc, char *argv[]) {
-	Tree *root = create_root_node();
-	print_tree(root);
+	Node *root = create_root_node();
+	Node *node = create_new_node(root, "users/");
+	char *val = "duong";
+
+	Leaf *leaf = create_new_leaf(node, "danny", val, (int16)strlen(val));
+	print_node(root);
+	print_node(node);
+	print_leaf(leaf);
 	return 0;
 
 
