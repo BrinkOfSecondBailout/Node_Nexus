@@ -21,7 +21,7 @@
 
 #define Print(x)						\
 	zero(buf, 256);						\
-	strncpy((char *)buf, (char *)(x), 255);			\
+	strncpy((char *)buf, (char *)(x), 256);			\
 	size = (int16)strlen((char *)buf);			\
 	if (size) {						\
 		bytes = write(fd, (char *)buf, size);		\

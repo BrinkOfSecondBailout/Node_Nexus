@@ -3,7 +3,6 @@
 #include "myserver.h"
 #include "database.h"
 
-
 static volatile int keep_running = 1;
 
 int active_connections = 0;
@@ -596,6 +595,58 @@ int cli_connection(int cli_fd) {
 	return 1;
 }
 
+int start_server(int argc, char *argv[]) {
+	struct sigaction sa;
+	sa.sa_handler = sigint_handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGINT, &sa, NULL) == -1) {
+		fprintf(stderr, "Failed to set SIGINT handler: %s\n", strerror(errno));
+		return -1;
+	}
+
+	int serv_fd, cli_fd;
+	const char *bind_addr = LOCAL_HOST;
+	if (argc < 2) { 
+		fprintf(stderr, "Usage: %s <listening port> [bind_addr]\n", argv[0]);
+		return -1;
+	}
+	char *port_number = argv[1];
+	serv_fd = server_init(bind_addr, atoi(port_number));
+	if (serv_fd <= 0) {
+		fprintf(stderr, "Server initialization failed: %s\n", error);
+		return -1;	
+	}
+	printf("Listening on %s:%s\n", bind_addr, port_number); 
+	
+	while (keep_running) {
+		cli_fd = cli_accept(serv_fd);	
+		if (!cli_fd) {
+			if (!keep_running) break;
+			fprintf(stderr, "%s\n", error);
+			continue;
+		}
+		printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
+
+	
+		if (!fork()) {
+			
+			close(serv_fd);
+			if (!cli_connection(cli_fd)) {
+				fprintf(stderr, "%s\n", error);
+			}
+			exit(0);
+		}
+		close(cli_fd);
+	}
+	printf("Shutting down server...\n");
+	if (close(serv_fd) == -1) {
+		fprintf(stderr, "Failed to close server socket: %s\n", strerror(errno));
+	}
+	return 0;
+}
+
+/*
 int main(int argc, char *argv[]) {
 	Node *root = create_root_node();
 	Node *node = create_new_node(root, "users");
@@ -612,12 +663,11 @@ int main(int argc, char *argv[]) {
 	Leaf *leaf4 = create_new_leaf(node3, "michael", val4, (int16)strlen(val4));
 	print_tree(1, root);
 	
-//	print_leaf(find_leaf(root, "shawn"));
+	print_leaf(find_leaf(root, "shawn"));
 
 	print_node(find_node(root, "temp"));
 
 	return 0;
-
 
 
 	struct sigaction sa;
@@ -670,6 +720,6 @@ int main(int argc, char *argv[]) {
 	return 0;
 
 }
-
+*/
 
 #pragma GCC diagnostic pop

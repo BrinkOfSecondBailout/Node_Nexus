@@ -13,6 +13,8 @@
 #include <stdarg.h>
 #include <signal.h>
 
+
+
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-result"
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -24,6 +26,8 @@
 #define METHOD_LENGTH 8
 #define URL_LENGTH 128
 #define LOCAL_HOST "127.0.0.1"
+
+
 
 struct http_request {
 	char method[METHOD_LENGTH];
@@ -55,5 +59,6 @@ void url_decode(char *, const char *, size_t);
 void clean_up(int, ...);
 char *read_client_body(int, char *);
 int cli_connection(int);
-int main(int, char**);
+int start_server(int, char **);
+// int main(int, char**);
 

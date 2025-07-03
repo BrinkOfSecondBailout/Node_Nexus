@@ -1,9 +1,9 @@
 C = gcc
 CFLAGS = -Wall -g -O2
 LDFLAGS = 
-SOURCES = myserver.c database.c
+SOURCES = based_data.c myserver.c database.c
 OBJECTS = $(SOURCES:.c=.o)
-	EXECUTABLE = myserver
+	EXECUTABLE = based
 
 all: $(EXECUTABLE)
 

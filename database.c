@@ -15,16 +15,25 @@ char *indent(char n) {
 	static char buf[256];
 	char *p;
 	if (n < 1)
-		return (char *)"";
-	assert(n < 120);
+		return "";
+	if(n >= 120) {
+		fprintf(stderr, "indent() failure\n");
+		return "";
+	}
 	zero(buf, 256);
 	for (i = 0, p = buf; i < n; i++, p+=3)
-		strncpy((char *)p, "   ", 3);
+		if (i == 0)
+			strncpy((char *)p, "|--", 3);
+		else
+			strncpy((char *)p, "---", 3);
 	return buf;
 }
 
 void print_tree(int fd, Node *root) {
-	assert(root);
+	if (!root) {
+		fprintf(stderr, "print_tree() failure, invalid root\n");
+		return;
+	}
 	char indentation;
 	char buf[256];
 	int16 size;
@@ -78,7 +87,10 @@ Node *create_root_node() {
 Node *create_new_node(Node *parent, char *path) {
 	Node *n;
 	int16 size;
-	assert(parent);
+	if (!parent) {
+		fprintf(stderr, "create_new_node() failure, invalid parent node\n");
+		return (Node *)0;
+	}
 	size = sizeof(Node);
 	n = (Node *)malloc((int)size);
 	zero((char *)n, size);
@@ -108,28 +120,47 @@ Node *create_new_node(Node *parent, char *path) {
 
 Leaf *find_first_leaf(Node *parent) {
 	Leaf *l;
-	assert(parent);
+	if (!parent) {
+		fprintf(stderr, "find_first_leaf() failure, invalid parent node\n");
+		return (Leaf *)0;
+	}
 	if (!parent->right)
 		return (Leaf *)0;
 	l = parent->right;
-	assert(l);
+
+	if (!l) {
+		fprintf(stderr, "find_first_leaf() failure, invalid leaf found\n");
+		return (Leaf *)0;
+	}
 	return l;
 }
 
 Leaf *find_last_leaf_linear(Node *parent) {
 	Leaf *l;
-	assert(parent);
+	if (!parent) {
+		fprintf(stderr, "find_last_leaf() failure, invalid parent node\n");
+		return (Leaf *)0;
+	}
+	
 	if (!parent->right)
 		return (Leaf *)0;
 	for (l = parent->right; l->right; l = l->right);
-	assert(l);
+	if (!l) {
+		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
+		return (Leaf *)0;
+	}
 	return l;
 }
+
 
 Leaf *create_new_leaf(Node *parent, char *key, char *value, int16 count) {
 	Leaf *last, *new;
 	int16 size;
-	assert(parent);
+	if (!parent) {
+		fprintf(stderr, "create_new_leaf() failure, invalid parent node\n");
+		return (Leaf *)0;
+	}
+	
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);
 	new = (Leaf *)malloc((int)size);
@@ -143,7 +174,10 @@ Leaf *create_new_leaf(Node *parent, char *key, char *value, int16 count) {
 	new->right = NULL;
 	strncpy(new->key, key, 127);
 	new->value = (char *)malloc(count);
-	assert(new->value);
+	if (!new->value) {
+		fprintf(stderr, "create_new_leaf() failure, malloc failed\n");
+		return (Leaf *)0;
+	}
 	strncpy(new->value, value, count);
 	new->size = count;
 	return new;
