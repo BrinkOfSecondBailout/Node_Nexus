@@ -19,7 +19,7 @@
 #define HASH_TABLE_SIZE 1024
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
-#define find_leaf(x, y)			find_leaf_linear(x, y)
+#define find_leaf(x)			find_leaf_hash(x)
 #define find_node(x, y)			find_node_linear(x, y)
 
 #define Print(x)						\
