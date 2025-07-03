@@ -2,6 +2,9 @@
 
 #include "database.h"
 
+static HashEntry *hash_table[HASH_TABLE_SIZE];
+
+
 void zero(char *buf, int16 size) {
 	char *p;
 	int16 n;
@@ -152,6 +155,18 @@ Leaf *find_last_leaf_linear(Node *parent) {
 	return l;
 }
 
+static uint32_t fnv1a_hash(const char *key) {
+	uint32_t hash = 2166136261u;
+	while (*key) {
+		hash ^= (uint32_t)*key++;
+		hash *= 16777619u;
+	}
+	return hash % HASH_TABLE_SIZE;
+}
+
+void hash_table_init() {
+	zero((char *)hash_table, sizeof(hash_table));
+}
 
 Leaf *create_new_leaf(Node *parent, char *key, char *value, int16 count) {
 	Leaf *last, *new;
@@ -180,7 +195,28 @@ Leaf *create_new_leaf(Node *parent, char *key, char *value, int16 count) {
 	}
 	strncpy(new->value, value, count);
 	new->size = count;
+	
+	uint32_t index = fnv1a_hash(key);
+	HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
+	zero((char *)entry, sizeof(HashEntry));
+	strncpy(entry->key, key, MAX_KEY_LEN);
+	entry->leaf = new;
+	entry->next = hash_table[index];
+	hash_table[index] = entry;
+		
 	return new;
+}
+
+Leaf *find_leaf_hash(char *key) {
+	uint32_t index = fnv1a_hash(key);
+	HashEntry *entry = hash_table[index];
+	while (entry) {
+		if (!strcmp(entry->key, key)) {
+			return entry->leaf;
+		}
+		entry = entry->next;
+	}
+	return (Leaf *) 0;
 }
 
 Leaf *find_leaf_linear(Node *root, char *key) {
@@ -241,6 +277,39 @@ void print_leaf(Leaf *l) {
 	return;
 }
 
+void free_leaf(Leaf *leaf) {
+	if (!leaf) return;
+	uint32_t index = fnv1a_hash(leaf->key);
+	HashEntry *entry = hash_table[index];
+	HashEntry *prev = NULL;
+	while (entry) {
+		if (entry->leaf == leaf) {
+			if (prev) {
+				prev->next = entry->next;
+			} else {
+				hash_table[index] = entry->next;
+			}
+			free(entry);
+			break;
+		}
+		prev = entry;
+		entry = entry->next;
+	}
+	free(leaf->value);
+	free(leaf);
+}
+
+void hash_table_free() {
+	for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+		HashEntry *entry = hash_table[i];
+		while (entry) {
+			HashEntry *next = entry->next;
+			free(entry);
+			entry = next;
+		}
+		hash_table[i] = NULL;
+	}
+}
 
 
 #pragma GCC diagnostic pop

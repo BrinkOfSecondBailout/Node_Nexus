@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
 	Leaf *leaf4 = create_new_leaf(node3, "michael", val4, (int16)strlen(val4));
 	print_tree(1, root);
 	
-	print_leaf(find_leaf(root, "shawn"));
+	print_leaf(find_leaf_hash("shawn"));
 
 	print_node(find_node(root, "temp"));
 
