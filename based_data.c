@@ -5,24 +5,32 @@
 int main(int argc, char* argv[]) {
 	
 	Node *root = create_root_node();
-	Node *node = create_new_node(root, "users");
-	Node *node2 = create_new_node(node, "login");
-	Node *node3 = create_new_node(node2, "temp");
-	char *val = "duong";
-	char *val2 = "riley";
-	char *val3 = "lewis";
-	char *val4 = "saylor";
-
-	Leaf *leaf = create_new_leaf(node2, "danny", val, (int16)strlen(val));
-	Leaf *leaf2 = create_new_leaf(node2, "lindsey", val2, (int16)strlen(val2));
-	Leaf *leaf3 = create_new_leaf(node, "shawn", val3, (int16)strlen(val3));
-	Leaf *leaf4 = create_new_leaf(node3, "michael", val4, (int16)strlen(val4));
-	print_tree(1, root);
+	Node *docs = create_new_node(root, "docs");
+	Node *users = create_new_node(root, "users");
+	Node *temp = create_new_node(docs, "temp");
+	Node *main_users = create_new_node(users, "main_users");
 	
-	print_leaf(find_leaf("shawn"));
+	
+	Leaf *leaf1 = create_new_leaf_string(docs, "note", "Hello, world!", 13);
+	Leaf *leaf2 = create_new_leaf_int(docs, "size", 1024);
+	Leaf *leaf3 = create_new_leaf_double(temp, "time", 1234567.123);
+	char binary_data[] = {0x01, 0x02, 0x03};
+	Leaf *leaf4 = create_new_leaf_binary(users, "data", binary_data, 3);
 
-	print_node(find_node(root, "temp"));
+/*
+	print_leaf(leaf1);
+	print_leaf(leaf2);
+	print_leaf(leaf3);
+	print_leaf(leaf4);
+	print_node(docs);
+*/
 
+	print_node(temp);
+
+	print_tree(1, root);
+
+	free_node(root);
+	hash_table_free();
 
 //	start_server(argc, argv);
 	return 0;
