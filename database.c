@@ -51,7 +51,7 @@ void print_leaves_of_node(Node *n, char indentation, int fd) {
 	if (!n) return;
 	if (n->leaf) {
 		first = find_first_leaf(n);
-		for (l = first; l; l = l->right) {
+		for (l = first; l; l = l->sibling) {
 			switch (l->type) {
 				case VALUE_STRING:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> '%s'\n",
@@ -271,7 +271,7 @@ Leaf *find_last_leaf_linear(Node *parent) {
 	
 	if (!parent->leaf)
 		return (Leaf *)0;
-	for (l = parent->leaf; l->right; l = l->right);
+	for (l = parent->leaf; l->sibling; l = l->sibling);
 	if (!l) {
 		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
 		return (Leaf *)0;
@@ -315,12 +315,12 @@ Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	new = (Leaf *)malloc((int)size);
 	zero((char *)new, size);
 	if (last) {
-		last->right = new;
+		last->sibling = new;
 	} else {
 		parent->leaf = new;
 	}
-	new->left = parent;
-	new->right = NULL;
+	new->parent = parent;
+	new->sibling = NULL;
 	strncpy(new->key, key, 127);
 	return new;
 }
@@ -398,7 +398,7 @@ Leaf *find_leaf_linear(Node *root, char *key) {
 				ret = l;
 				break;
 			}
-			l = l->right;
+			l = l->sibling;
 		}
 	}
 	return ret;
@@ -437,7 +437,7 @@ void print_leaf(Leaf *l) {
 		printf("Invalid leaf\n");
 	} else {
 		printf("**Leaf**\n");
-		printf("Path: %s\n", l->left->path);
+		printf("Path: %s\n", l->parent->path);
 		printf("Key: %s\n", l->key);
 		printf("Value: ");
 		switch(l->type) {
@@ -495,7 +495,7 @@ void free_node(Node *node) {
 	if (!node) return;
 	Leaf *leaf = node->leaf;
 	while (leaf) {
-		Leaf *next = leaf->right;
+		Leaf *next = leaf->sibling;
 		free_leaf(leaf);
 		leaf = next;
 	}

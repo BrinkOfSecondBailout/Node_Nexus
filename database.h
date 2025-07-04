@@ -10,7 +10,6 @@
 #include <assert.h>
 #include <stdint.h>
 
-
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic push
 
@@ -58,8 +57,8 @@ struct s_node {
 };
 
 struct s_leaf {
-	struct s_node *left;
-	struct s_leaf *right;
+	struct s_node *parent;
+	struct s_leaf *sibling;
 	char key[MAX_KEY_LEN];
 	LeafValue value;
 	ValueType type;
