@@ -19,21 +19,9 @@
 #define HASH_TABLE_SIZE 1024
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
-#define find_last_node(x)		find_last_node_linear(x)
+#define find_last_child_node(x)		find_last_child_node_linear(x)
 #define find_leaf(x)			find_leaf_hash(x)
 #define find_node(x, y)			find_node_linear(x, y)
-
-#define Print(x)						\
-	zero((char *)buf, 256);						\
-	strncpy((char *)buf, (char *)(x), 256);			\
-	size = (int16)strlen((char *)buf);			\
-	if (size) {						\
-		bytes = write(fd, (char *)buf, size);		\
-		if (bytes == -1) {				\
-			fprintf(stderr, "Print() failure");	\
-			return;					\
-		}						\
-	}							\
 
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
@@ -62,10 +50,10 @@ typedef union {
 
 
 struct s_node {
-	struct s_node *up;
-	struct s_node *next;
-	struct s_node *left;
-	Leaf *right;
+	struct s_node *parent;
+	struct s_node *child;
+	struct s_node *sibling;
+	Leaf *leaf;
 	char path[MAX_PATH_LEN];
 };
 
@@ -85,11 +73,13 @@ struct s_hash_entry {
 
 void zero(char *, int16);
 char *indent(char);
+void print_original_node(Node *, char, int);
+void print_leaves_of_node(Node *, char, int);
 void print_node_and_leaves(Node *, char, int );
 void print_tree(int, Node *);
 Node *create_root_node();
-Node *find_first_node(Node *);
-Node *find_last_node_linear(Node *);
+Node *find_first_child_node(Node *);
+Node *find_last_child_node_linear(Node *);
 Node *create_new_node(Node *, char *);
 Leaf *find_first_leaf(Node *);
 Leaf *find_last_leaf_linear(Node *);

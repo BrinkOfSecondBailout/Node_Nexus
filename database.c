@@ -35,16 +35,21 @@ int write_str(int fd, const char *str) {
 	}
 	return 0;
 }
-
-void print_node_and_leaves(Node *n, char indentation, int fd) {
+void print_original_node(Node *n, char indentation, int fd) {
 	char buf[512];
-	Leaf *l, *first;
-	
 	if (!n) return;
 	snprintf(buf, sizeof(buf), "%s%s\n", indent(indentation), n->path);
-	if (write_str(fd, buf) < 0) return;
+	if (write_str(fd, buf) < 0) {
+		fprintf(stderr, "print_original_node() failure\n");	
+	}
+	return;
+}
 
-	if (n->right) {
+void print_leaves_of_node(Node *n, char indentation, int fd) {
+	char buf[512];
+	Leaf *l, *first;
+	if (!n) return;
+	if (n->leaf) {
 		first = find_first_leaf(n);
 		for (l = first; l; l = l->right) {
 			switch (l->type) {
@@ -65,50 +70,43 @@ void print_node_and_leaves(Node *n, char indentation, int fd) {
 						indent(indentation), n->path, l->key, l->value.binary.size);
 					break;
 			}
-			if (write_str(fd, buf) < 0) return;
-		}
-	}
-
-/*
-	print_f(buf, indent(indentation), fd);
-	print_f(buf, n->path, fd);
-	print_f(buf, "\n", fd);
-	if (n->right) {
-		first = find_first_leaf(n);
-		if (first) {
-			for (l = first; l; l = l->right) {
-				print_f(buf, indent(indentation), fd);
-				print_f(buf, n->path, fd);
-				print_f(buf, "/..", fd);
-				print_f(buf, l->key, fd);
-				print_f(buf, " -> ", fd);
-				switch (l->type) {
-					case VALUE_STRING:
-						print_f(buf, "'", fd);
-						if (write(fd, l->value.string, strlen(l->value.string)) == -1) {
-							fprintf(stderr, "print_tree() failure");
-							return;
-						}
-						print_f(buf, "'", fd);
-						break;
-					case VALUE_INT:
-						snprintf(buf, 256, "%d", l->value.integer);
-						break;
-					case VALUE_DOUBLE:
-						snprintf(buf, 256, "%.2f", l->value.floating);
-						break;
-					case VALUE_BINARY:
-						snprintf(buf, 256, "[binary data, size=%d]",
-							l->value.binary.size);
-						break;
-
-				}
-				print_f(buf, "\n", fd);
+			if (write_str(fd, buf) < 0) {
+				fprintf(stderr, "print_leaves_of_node() failure\n");
 			}
 		}
 	}
+}
 
-	*/
+void print_node_and_leaves(Node *n, char indentation, int fd) {
+	if (!n) return;
+
+	// Print original node
+	print_original_node(n, indentation, fd);
+	
+	// Print all leaves
+	print_leaves_of_node(n, indentation, fd);
+
+}
+
+static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
+	int i;
+/*
+	printf("Starting comparison...\n");
+	printf("Name: %s\n", node->path);
+	printf("Address: %p\n", node);
+*/
+	for (i = 0; i < stack_count && i < 256; i++) {
+
+/*
+		printf("In stack name: %s\n", stack[i]->path);
+		printf("In stack address: %p\n", stack[i]);
+*/
+		if (stack[i] == node) {
+			return 1;
+		}
+	}
+//	printf("Ending comparison...\n");
+	return 0;
 }
 
 void print_tree(int fd, Node *root) {
@@ -116,20 +114,44 @@ void print_tree(int fd, Node *root) {
 		fprintf(stderr, "print_tree() failure, invalid root\n");
 		return;
 	}
-	char indentation = 0;
-	Node *n, *placeholder;
-	for (n = root; n; n = n->left) {
-		placeholder = n;
-		print_node_and_leaves(n, indentation, 2);
-		while (n->next) {
-			n = n->next;
-			print_node_and_leaves(n, indentation, 2);	
-		}	
-		n = placeholder;	
-		indentation++;
-	} 
+	Node *stack[256];
+	Node *used_stack[256];
+	int used_stack_count = 0;
 
-	printf("\n");
+	int stack_top = -1;
+	char indentations[256];
+	
+	stack[++stack_top] = root;
+
+	used_stack[used_stack_count++] = root;
+
+	indentations[stack_top] = 0;
+
+	while (stack_top >= 0) {
+		Node *n = stack[stack_top];
+		char indentation = indentations[stack_top--];
+		print_node_and_leaves(n, indentation, fd);
+
+		Node *sibling = n->sibling;
+		while (sibling) {
+			if (!is_node_in_stack(sibling, used_stack, used_stack_count)) {
+				stack[++stack_top] = sibling;
+				used_stack[used_stack_count++] = sibling;
+				indentations[stack_top] = indentation;
+			}
+			sibling = sibling->sibling;
+		}
+
+		if (n->child) {
+			if (!is_node_in_stack(n->child, used_stack, used_stack_count)) {
+				stack[++stack_top] = n->child;
+				used_stack[used_stack_count++] = n->child;
+			}
+			indentations[stack_top] = indentation + 1;
+		}
+	}
+	write_str(fd, "\n");
+	
 }
 
 Node *create_root_node() {
@@ -139,22 +161,22 @@ Node *create_root_node() {
 		return NULL;
 	}
 	
-	root->up = NULL;
-	root->next = NULL;
-	root->left = NULL;
-	root->right = NULL;
+	root->parent = NULL;
+	root->sibling = NULL;
+	root->child = NULL;
+	root->leaf = NULL;
 	strncpy(root->path, "/", sizeof(root->path) - 1);
 	root->path[sizeof(root->path) - 1] = '\0';
 	return root;
 }
 
-Node *find_first_node(Node *parent) {
+Node *find_first_child_node(Node *parent) {
 	Node *n;
 	if (!parent) {
 		fprintf(stderr, "find_first_node() failure, invalid parent node\n");
 		return (Node *)0;
 	}
-	n = parent->left;
+	n = parent->child;
 	if (!n) {
 		fprintf(stderr, "find_first_node() failure, no node found\n");
 		return (Node *)0;
@@ -162,18 +184,18 @@ Node *find_first_node(Node *parent) {
 	return n;
 }
 
-Node *find_last_node_linear(Node *parent) {
+Node *find_last_child_node_linear(Node *parent) {
 	Node *n;
 	if (!parent) {
 		fprintf(stderr, "find_last_node_linear() failure, invalid parent node\n");
 		return (Node *)0;
 	}
-	n = parent->left;
+	n = parent->child;
 	if (!n) {
 		return (Node *)0;	
 	}
-	while (n->next) {
-		n = n->next;
+	while (n->sibling) {
+		n = n->sibling;
 	}
 	if (!n) {
 		return (Node *)0;
@@ -199,17 +221,17 @@ Node *create_new_node(Node *parent, char *path) {
 		return 0;
 	}
 
-	last = find_last_node(parent);
+	last = find_last_child_node(parent);
 	if (!last) {
-		parent->left = new;
+		parent->child = new;
 	} else {
-		last->next = new;
+		last->sibling = new;
 	}
 
-	new->up = parent;
-	new->next = NULL;
-	new->left = NULL;
-	new->right = NULL; 
+	new->parent = parent;
+	new->sibling = NULL;
+	new->child = NULL;
+	new->leaf = NULL; 
 
 	if (!strcmp(parent->path, "/")) {
 		snprintf(temp_path, MAX_PATH_LEN, "/%s", path);
@@ -229,9 +251,9 @@ Leaf *find_first_leaf(Node *parent) {
 		fprintf(stderr, "find_first_leaf() failure, invalid parent node\n");
 		return (Leaf *)0;
 	}
-	if (!parent->right)
+	if (!parent->leaf)
 		return (Leaf *)0;
-	l = parent->right;
+	l = parent->leaf;
 
 	if (!l) {
 		fprintf(stderr, "find_first_leaf() failure, invalid leaf found\n");
@@ -247,9 +269,9 @@ Leaf *find_last_leaf_linear(Node *parent) {
 		return (Leaf *)0;
 	}
 	
-	if (!parent->right)
+	if (!parent->leaf)
 		return (Leaf *)0;
-	for (l = parent->right; l->right; l = l->right);
+	for (l = parent->leaf; l->right; l = l->right);
 	if (!l) {
 		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
 		return (Leaf *)0;
@@ -295,7 +317,7 @@ Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	if (last) {
 		last->right = new;
 	} else {
-		parent->right = new;
+		parent->leaf = new;
 	}
 	new->left = parent;
 	new->right = NULL;
@@ -369,7 +391,7 @@ Leaf *find_leaf_linear(Node *root, char *key) {
 	Node *n;
 	Leaf *l;
 	Leaf *ret = (Leaf *)0;
-	for (n = root; n; n = n->left) {
+	for (n = root; n; n = n->child) {
 		l = find_first_leaf(n);
 		while (l) {
 			if (!strcmp(l->key, key)) {
@@ -385,7 +407,7 @@ Leaf *find_leaf_linear(Node *root, char *key) {
 Node *find_node_linear(Node *root, char *path) {
 	Node *n;
 	Node *ret = (Node *)0;
-	for (n = root; n; n = n->left) {
+	for (n = root; n; n = n->child) {
 		if (strstr(n->path, path)) {
 			ret = n;
 			break;
@@ -401,7 +423,7 @@ void print_node(Node *n) {
 	} else {
 		printf("**Node**\n");
 		printf("Path: %s\n", n->path);
-		if (n->right)
+		if (n->child)
 			printf("Folder has files inside\n");
 		else
 			printf("Folder is empty\n");
@@ -471,14 +493,14 @@ void free_leaf(Leaf *leaf) {
 
 void free_node(Node *node) {
 	if (!node) return;
-	Leaf *leaf = node->right;
+	Leaf *leaf = node->leaf;
 	while (leaf) {
 		Leaf *next = leaf->right;
 		free_leaf(leaf);
 		leaf = next;
 	}
-	if (node->left) {
-		free_node(node->left);
+	if (node->child) {
+		free_node(node->child);
 	}
 	free(node);
 }
