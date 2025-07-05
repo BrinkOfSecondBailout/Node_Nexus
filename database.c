@@ -141,10 +141,7 @@ void print_tree(int fd, Node *root) {
 
 Node *create_root_node() {
 	Node *root = (Node *)malloc(sizeof(Node));
-	if (!root) {
-		fprintf(stderr, "Failed to allocate root\n");
-		return NULL;
-	}
+	CHECK_NULL(root, "Failed to allocate root");
 	
 	root->parent = NULL;
 	root->sibling = NULL;
@@ -157,24 +154,15 @@ Node *create_root_node() {
 
 Node *find_first_child_node(Node *parent) {
 	Node *n;
-	if (!parent) {
-		fprintf(stderr, "find_first_node() failure, invalid parent node\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "find_first_child_node() failure, invalid parent node");
 	n = parent->child;
-	if (!n) {
-		fprintf(stderr, "find_first_node() failure, no node found\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "find_first_child_node() failure, no node found");
 	return n;
 }
 
 Node *find_last_child_node_linear(Node *parent) {
 	Node *n;
-	if (!parent) {
-		fprintf(stderr, "find_last_node_linear() failure, invalid parent node\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "find_last_child_node() failure, invalid parent node");
 	n = parent->child;
 	if (!n) {
 		return NULL;	
@@ -191,10 +179,7 @@ Node *find_last_child_node_linear(Node *parent) {
 Node *create_new_node(Node *parent, char *path) {
 	Node *new, *last;
 	size_t size;
-	if (!parent) {
-		fprintf(stderr, "create_new_node() failure, invalid parent node\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
 	size = sizeof(Node);
 	new = (Node *)malloc(size);
 	zero((char *)new, size);
@@ -216,14 +201,9 @@ Node *create_new_node(Node *parent, char *path) {
 	new->parent = parent;
 	new->sibling = NULL;
 	new->child = NULL;
-	new->leaf = NULL; 
+	new->leaf = NULL;
 
-	if (!strcmp(parent->path, "/")) {
-		snprintf(temp_path, MAX_PATH_LEN, "/%s", path);
-	} else {
-		snprintf(temp_path, MAX_PATH_LEN, "%s/%s", parent->path, path);
-	}
-
+	CONCAT_PATH(temp_path, parent->path, path, MAX_PATH_LEN); 
 	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
 	
 	return new;
@@ -231,10 +211,7 @@ Node *create_new_node(Node *parent, char *path) {
 
 Leaf *find_first_leaf(Node *parent) {
 	Leaf *l;
-	if (!parent) {
-		fprintf(stderr, "find_first_leaf() failure, invalid parent node\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "find_first_leaf() failure, invalid parent node");
 	if (!parent->leaf)
 		return NULL;
 	l = parent->leaf;
@@ -248,10 +225,7 @@ Leaf *find_first_leaf(Node *parent) {
 
 Leaf *find_last_leaf_linear(Node *parent) {
 	Leaf *l;
-	if (!parent) {
-		fprintf(stderr, "find_last_leaf() failure, invalid parent node\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "find_last_leaf() failure, invalid parent node");
 	
 	if (!parent->leaf)
 		return NULL;
@@ -289,10 +263,7 @@ void add_leaf_to_table(Leaf *leaf) {
 Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	Leaf *last, *new;
 	size_t size;
-	if (!parent) {
-		fprintf(stderr, "create_new_leaf() failure, invalid parent node\n");
-		return NULL;
-	}
+	CHECK_NULL(parent, "create_new_leaf() failure, invalid parent node");
 	
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);

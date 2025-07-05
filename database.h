@@ -22,6 +22,23 @@
 #define find_leaf(x)			find_leaf_hash(x)
 #define find_node(x, y)			find_node_linear(x, y)
 
+#define CONCAT_PATH(dest, parent_path, child_path, max_len)			\
+	do {									\
+		if (strcmp((parent_path), "/") == 0)				\
+			snprintf((dest), (max_len), "/%s", (child_path));	\
+		else								\
+			snprintf((dest), (max_len), "%s/%s", (parent_path), (child_path));	\
+	} while (0)
+
+#define CHECK_NULL(ptr, err_message)						\
+	do {									\
+		if (!(ptr)) {							\
+			fprintf(stderr, "%s\n", err_message);			\
+			return NULL;						\
+		}								\
+	} while (0)
+
+
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
 typedef struct s_hash_entry HashEntry;
