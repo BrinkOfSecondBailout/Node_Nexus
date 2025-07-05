@@ -28,7 +28,7 @@ typedef struct s_hash_entry HashEntry;
 
 typedef unsigned int int32;
 typedef unsigned short int int16;
-typedef signed char int8;
+typedef unsigned char int8;
 
 typedef enum {
 	VALUE_STRING,
@@ -70,11 +70,11 @@ struct s_hash_entry {
 	struct s_hash_entry *next;
 };
 
-void zero(char *, int16);
-char *indent(char);
-void print_original_node(Node *, char, int);
-void print_leaves_of_node(Node *, char, int);
-void print_node_and_leaves(Node *, char, int );
+void zero(char *, size_t);
+char *indent(int8);
+void print_original_node(Node *, int8, int);
+void print_leaves_of_node(Node *, int8, int);
+void print_node_and_leaves(Node *, int8, int );
 void print_tree(int, Node *);
 Node *create_root_node();
 Node *find_first_child_node(Node *);

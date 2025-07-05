@@ -5,24 +5,21 @@
 static HashEntry *hash_table[HASH_TABLE_SIZE];
 
 
-void zero(char *buf, int16 size) {
-	char *p;
-	int16 n;
-	for (n = 0, p = buf; n < size; n++, p++)
-		*p = 0;
-	return;
+void zero(char *buf, size_t size) {
+	memset(buf, 0, size);
 }
 
-char *indent(char n) {
-	static char buf[256];
-	if (n < 1 || n >= 120) {
+char *indent(int8 n) {
+	static char buf[512];
+	if (n < 1 || n >= 128) {
 		buf[0] = '\0';
+		return buf;
 	}
 	int i;
 	for (i = 0; i < n; i++) {
-		memcpy(buf + i * 3, i == 0 ? "|--" : "---", 3);
+		memcpy(buf + i * 4, i == 0 ? "|---" : "----", 4);
 	}
-	buf[i * 3] = '\0';
+	buf[n * 4] = '\0';
 	return buf;
 }
 
@@ -35,7 +32,7 @@ int write_str(int fd, const char *str) {
 	}
 	return 0;
 }
-void print_original_node(Node *n, char indentation, int fd) {
+void print_original_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	if (!n) return;
 	snprintf(buf, sizeof(buf), "%s%s\n", indent(indentation), n->path);
@@ -45,7 +42,7 @@ void print_original_node(Node *n, char indentation, int fd) {
 	return;
 }
 
-void print_leaves_of_node(Node *n, char indentation, int fd) {
+void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	Leaf *l, *first;
 	if (!n) return;
@@ -77,35 +74,23 @@ void print_leaves_of_node(Node *n, char indentation, int fd) {
 	}
 }
 
-void print_node_and_leaves(Node *n, char indentation, int fd) {
+void print_node_and_leaves(Node *n, int8 indentation, int fd) {
 	if (!n) return;
 
-	// Print original node
 	print_original_node(n, indentation, fd);
 	
-	// Print all leaves
 	print_leaves_of_node(n, indentation, fd);
 
 }
 
 static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
 	int i;
-/*
-	printf("Starting comparison...\n");
-	printf("Name: %s\n", node->path);
-	printf("Address: %p\n", node);
-*/
 	for (i = 0; i < stack_count && i < 256; i++) {
 
-/*
-		printf("In stack name: %s\n", stack[i]->path);
-		printf("In stack address: %p\n", stack[i]);
-*/
 		if (stack[i] == node) {
 			return 1;
 		}
 	}
-//	printf("Ending comparison...\n");
 	return 0;
 }
 
@@ -119,7 +104,7 @@ void print_tree(int fd, Node *root) {
 	int used_stack_count = 0;
 
 	int stack_top = -1;
-	char indentations[256];
+	int8 indentations[256];
 	
 	stack[++stack_top] = root;
 
@@ -129,7 +114,7 @@ void print_tree(int fd, Node *root) {
 
 	while (stack_top >= 0) {
 		Node *n = stack[stack_top];
-		char indentation = indentations[stack_top--];
+		int8 indentation = indentations[stack_top--];
 		print_node_and_leaves(n, indentation, fd);
 
 		Node *sibling = n->sibling;
@@ -155,7 +140,7 @@ void print_tree(int fd, Node *root) {
 }
 
 Node *create_root_node() {
-	Node *root = malloc(sizeof(Node));
+	Node *root = (Node *)malloc(sizeof(Node));
 	if (!root) {
 		fprintf(stderr, "Failed to allocate root\n");
 		return NULL;
@@ -205,7 +190,7 @@ Node *find_last_child_node_linear(Node *parent) {
 
 Node *create_new_node(Node *parent, char *path) {
 	Node *new, *last;
-	int16 size;
+	size_t size;
 	if (!parent) {
 		fprintf(stderr, "create_new_node() failure, invalid parent node\n");
 		return (Node *)0;
@@ -289,13 +274,13 @@ static uint32_t fnv1a_hash(const char *key) {
 }
 
 void hash_table_init() {
-	zero((char *)hash_table, sizeof(hash_table));
+	zero((char *)hash_table, (size_t)sizeof(hash_table));
 }
 
 void add_leaf_to_table(Leaf *leaf) {	
 	uint32_t index = fnv1a_hash(leaf->key);
 	HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
-	zero((char *)entry, sizeof(HashEntry));
+	zero((char *)entry, (size_t)sizeof(HashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
 	entry->next = hash_table[index];
@@ -304,7 +289,7 @@ void add_leaf_to_table(Leaf *leaf) {
 
 Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	Leaf *last, *new;
-	int16 size;
+	size_t size;
 	if (!parent) {
 		fprintf(stderr, "create_new_leaf() failure, invalid parent node\n");
 		return (Leaf *)0;
