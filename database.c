@@ -63,7 +63,7 @@ void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 						indent(indentation), n->path, l->key, l->value.floating);
 					break;
 				case VALUE_BINARY:
-					snprintf(buf, sizeof(buf), "%s%s/..%s -> [binary data, size = %d]\n",
+					snprintf(buf, sizeof(buf), "%s%s/..%s -> [binary data, size = %ld]\n",
 						indent(indentation), n->path, l->key, l->value.binary.size);
 					break;
 			}
@@ -159,12 +159,12 @@ Node *find_first_child_node(Node *parent) {
 	Node *n;
 	if (!parent) {
 		fprintf(stderr, "find_first_node() failure, invalid parent node\n");
-		return (Node *)0;
+		return NULL;
 	}
 	n = parent->child;
 	if (!n) {
 		fprintf(stderr, "find_first_node() failure, no node found\n");
-		return (Node *)0;
+		return NULL;
 	}
 	return n;
 }
@@ -173,17 +173,17 @@ Node *find_last_child_node_linear(Node *parent) {
 	Node *n;
 	if (!parent) {
 		fprintf(stderr, "find_last_node_linear() failure, invalid parent node\n");
-		return (Node *)0;
+		return NULL;
 	}
 	n = parent->child;
 	if (!n) {
-		return (Node *)0;	
+		return NULL;	
 	}
 	while (n->sibling) {
 		n = n->sibling;
 	}
 	if (!n) {
-		return (Node *)0;
+		return NULL;
 	}
 	return n;
 }
@@ -193,17 +193,17 @@ Node *create_new_node(Node *parent, char *path) {
 	size_t size;
 	if (!parent) {
 		fprintf(stderr, "create_new_node() failure, invalid parent node\n");
-		return (Node *)0;
+		return NULL;
 	}
 	size = sizeof(Node);
-	new = (Node *)malloc((int)size);
+	new = (Node *)malloc(size);
 	zero((char *)new, size);
 	char temp_path[MAX_PATH_LEN];
 	size_t parent_len = strlen(parent->path);
 	size_t new_len = strlen(path);	
 	if (parent_len + new_len + 1 >= MAX_PATH_LEN) {
 		fprintf(stderr, "Path too long in new node\n");
-		return 0;
+		return NULL;
 	}
 
 	last = find_last_child_node(parent);
@@ -226,7 +226,6 @@ Node *create_new_node(Node *parent, char *path) {
 
 	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
 	
-	new->path[MAX_PATH_LEN - 1] = '\0';
 	return new;
 }
 
@@ -234,15 +233,15 @@ Leaf *find_first_leaf(Node *parent) {
 	Leaf *l;
 	if (!parent) {
 		fprintf(stderr, "find_first_leaf() failure, invalid parent node\n");
-		return (Leaf *)0;
+		return NULL;
 	}
 	if (!parent->leaf)
-		return (Leaf *)0;
+		return NULL;
 	l = parent->leaf;
 
 	if (!l) {
 		fprintf(stderr, "find_first_leaf() failure, invalid leaf found\n");
-		return (Leaf *)0;
+		return NULL;
 	}
 	return l;
 }
@@ -251,15 +250,15 @@ Leaf *find_last_leaf_linear(Node *parent) {
 	Leaf *l;
 	if (!parent) {
 		fprintf(stderr, "find_last_leaf() failure, invalid parent node\n");
-		return (Leaf *)0;
+		return NULL;
 	}
 	
 	if (!parent->leaf)
-		return (Leaf *)0;
+		return NULL;
 	for (l = parent->leaf; l->sibling; l = l->sibling);
 	if (!l) {
 		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
-		return (Leaf *)0;
+		return NULL;
 	}
 	return l;
 }
@@ -292,12 +291,12 @@ Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	size_t size;
 	if (!parent) {
 		fprintf(stderr, "create_new_leaf() failure, invalid parent node\n");
-		return (Leaf *)0;
+		return NULL;
 	}
 	
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);
-	new = (Leaf *)malloc((int)size);
+	new = (Leaf *)malloc(size);
 	zero((char *)new, size);
 	if (last) {
 		last->sibling = new;
@@ -306,12 +305,12 @@ Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	}
 	new->parent = parent;
 	new->sibling = NULL;
-	strncpy(new->key, key, 127);
+	strncpy(new->key, key, MAX_KEY_LEN - 1);
 	return new;
 }
 
 
-Leaf *create_new_leaf_string(Node *parent, char *key, char *value, int16 count) {
+Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);	
 
@@ -319,7 +318,7 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, int16 count) 
 	new->value.string = (char *)malloc(count);
 	if (!new->value.string) {
 		fprintf(stderr, "create_new_leaf() failure, malloc failed\n");
-		return (Leaf *)0;
+		return NULL;
 	}
 	strncpy(new->value.string, value, count);
 	
@@ -345,14 +344,14 @@ Leaf *create_new_leaf_double(Node *parent, char *key, double value) {
 	return new;
 }
 
-Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, int16 size) {
+Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
 	new->type = VALUE_BINARY;
-	new->value.binary.data = malloc(size);
+	new->value.binary.data = (void *)malloc(size);
 	if (!new->value.binary.data) {
 		fprintf(stderr, "create_new_leaf_binary() malloc failure");
-		return (Leaf *)0;
+		return NULL;
 	}
 	memcpy(new->value.binary.data, data, size);
 	new->value.binary.size = size;
@@ -369,36 +368,32 @@ Leaf *find_leaf_hash(char *key) {
 		}
 		entry = entry->next;
 	}
-	return (Leaf *) 0;
+	return NULL;
 }
 
 Leaf *find_leaf_linear(Node *root, char *key) {
 	Node *n;
 	Leaf *l;
-	Leaf *ret = (Leaf *)0;
 	for (n = root; n; n = n->child) {
 		l = find_first_leaf(n);
 		while (l) {
 			if (!strcmp(l->key, key)) {
-				ret = l;
-				break;
+				return l;
 			}
 			l = l->sibling;
 		}
 	}
-	return ret;
+	return NULL;
 }
 
 Node *find_node_linear(Node *root, char *path) {
 	Node *n;
-	Node *ret = (Node *)0;
 	for (n = root; n; n = n->child) {
 		if (strstr(n->path, path)) {
-			ret = n;
-			break;
+			return n;
 		}
 	}
-	return ret;
+	return NULL;
 }
 
 
@@ -436,7 +431,7 @@ void print_leaf(Leaf *l) {
 				printf("%.2f (double)\n", l->value.floating);
 				break;
 			case VALUE_BINARY:
-				printf("[binary data, size=%d]\n", l->value.binary.size);
+				printf("[binary data, size=%ld]\n", l->value.binary.size);
 				break;
 		}
 

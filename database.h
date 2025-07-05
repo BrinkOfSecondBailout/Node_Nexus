@@ -43,7 +43,7 @@ typedef union {
 	double floating;
 	struct {
 		void *data;
-		int16 size;
+		size_t size;
 	} binary;
 } LeafValue;
 
@@ -85,10 +85,10 @@ Leaf *find_last_leaf_linear(Node *);
 void add_leaf_to_table(Leaf *);
 Leaf *find_leaf_hash(char *);
 Leaf *create_new_leaf_prototype(Node *, char *);
-Leaf *create_new_leaf_string(Node *, char *, char *, int16);
+Leaf *create_new_leaf_string(Node *, char *, char *, size_t);
 Leaf *create_new_leaf_int(Node *, char *, int32_t);
 Leaf *create_new_leaf_double(Node *, char *, double);
-Leaf *create_new_leaf_binary(Node *, char *, void *, int16);
+Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
 Node *find_node_linear(Node *, char *);
 Leaf *find_leaf_linear(Node *, char *);
 void print_node(Node *);
