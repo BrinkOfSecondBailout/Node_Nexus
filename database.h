@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic push
 
 #define MAX_PATH_LEN 256
@@ -38,6 +39,16 @@
 		}								\
 	} while (0)
 
+#define HASH_KEY(key, size)							\
+	({									\
+	 	uint32_t hash = 2166136261u;					\
+		const char *k = (key);						\
+		while (*k) {							\
+			hash ^= (uint32_t)*k++;					\
+			hash *= 16777619u;					\
+		}								\
+		hash % (size);							\
+	})
 
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
@@ -88,20 +99,20 @@ struct s_hash_entry {
 };
 
 void zero(char *, size_t);
-char *indent(int8);
-void print_original_node(Node *, int8, int);
-void print_leaves_of_node(Node *, int8, int);
-void print_node_and_leaves(Node *, int8, int );
+// char *indent(int8);
+// void print_original_node(Node *, int8, int);
+// void print_leaves_of_node(Node *, int8, int);
+// void print_node_and_leaves(Node *, int8, int );
 void print_tree(int, Node *);
 Node *create_root_node();
-Node *find_first_child_node(Node *);
-Node *find_last_child_node_linear(Node *);
+// Node *find_first_child_node(Node *);
+// Node *find_last_child_node_linear(Node *);
 Node *create_new_node(Node *, char *);
-Leaf *find_first_leaf(Node *);
-Leaf *find_last_leaf_linear(Node *);
-void add_leaf_to_table(Leaf *);
-Leaf *find_leaf_hash(char *);
-Leaf *create_new_leaf_prototype(Node *, char *);
+// Leaf *find_first_leaf(Node *);
+// Leaf *find_last_leaf_linear(Node *);
+// void add_leaf_to_table(Leaf *);
+Leaf *find_leaf_by_hash(char *);
+// Leaf *create_new_leaf_prototype(Node *, char *);
 Leaf *create_new_leaf_string(Node *, char *, char *, size_t);
 Leaf *create_new_leaf_int(Node *, char *, int32_t);
 Leaf *create_new_leaf_double(Node *, char *, double);

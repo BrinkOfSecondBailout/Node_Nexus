@@ -9,6 +9,10 @@ void zero(char *buf, size_t size) {
 	memset(buf, 0, size);
 }
 
+void hash_table_init() {
+	zero((char *)hash_table, (size_t)sizeof(hash_table));
+}
+
 char *indent(int8 n) {
 	static char buf[512];
 	if (n < 1 || n >= 128) {
@@ -32,7 +36,7 @@ int write_str(int fd, const char *str) {
 	}
 	return 0;
 }
-void print_original_node(Node *n, int8 indentation, int fd) {
+static void print_original_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	if (!n) return;
 	snprintf(buf, sizeof(buf), "%s%s\n", indent(indentation), n->path);
@@ -42,7 +46,108 @@ void print_original_node(Node *n, int8 indentation, int fd) {
 	return;
 }
 
-void print_leaves_of_node(Node *n, int8 indentation, int fd) {
+static Leaf *find_first_leaf(Node *parent) {
+	Leaf *l;
+	CHECK_NULL(parent, "find_first_leaf() failure, invalid parent node");
+	if (!parent->leaf)
+		return NULL;
+	l = parent->leaf;
+
+	if (!l) {
+		fprintf(stderr, "find_first_leaf() failure, invalid leaf found\n");
+		return NULL;
+	}
+	return l;
+}
+
+static Leaf *find_last_leaf_linear(Node *parent) {
+	Leaf *l;
+	CHECK_NULL(parent, "find_last_leaf() failure, invalid parent node");
+	
+	if (!parent->leaf)
+		return NULL;
+	for (l = parent->leaf; l->sibling; l = l->sibling);
+	if (!l) {
+		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
+		return NULL;
+	}
+	return l;
+}
+
+Leaf *find_leaf_by_hash(char *key) {
+	uint32_t index = HASH_KEY(key, HASH_TABLE_SIZE);
+	HashEntry *entry = hash_table[index];
+	while (entry) {
+		if (!strcmp(entry->key, key)) {
+			return entry->leaf;
+		}
+		entry = entry->next;
+	}
+	return NULL;
+}
+
+Leaf *find_leaf_linear(Node *root, char *key) {
+	Node *n;
+	Leaf *l;
+	for (n = root; n; n = n->child) {
+		l = find_first_leaf(n);
+		while (l) {
+			if (!strcmp(l->key, key)) {
+				return l;
+			}
+			l = l->sibling;
+		}
+	}
+	return NULL;
+}
+
+Node *find_node_linear(Node *root, char *path) {
+	Node *n;
+	for (n = root; n; n = n->child) {
+		if (strstr(n->path, path)) {
+			return n;
+		}
+	}
+	return NULL;
+}
+
+static Node *find_first_child_node(Node *parent) {
+	Node *n;
+	CHECK_NULL(parent, "find_first_child_node() failure, invalid parent node");
+	n = parent->child;
+	CHECK_NULL(parent, "find_first_child_node() failure, no node found");
+	return n;
+}
+
+static Node *find_last_child_node_linear(Node *parent) {
+	Node *n;
+	CHECK_NULL(parent, "find_last_child_node() failure, invalid parent node");
+	n = parent->child;
+	if (!n) {
+		return NULL;	
+	}
+	while (n->sibling) {
+		n = n->sibling;
+	}
+	if (!n) {
+		return NULL;
+	}
+	return n;
+}
+
+static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
+	int i;
+	for (i = 0; i < stack_count && i < 256; i++) {
+
+		if (stack[i] == node) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
+static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	Leaf *l, *first;
 	if (!n) return;
@@ -74,24 +179,13 @@ void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	}
 }
 
-void print_node_and_leaves(Node *n, int8 indentation, int fd) {
+static void print_node_and_leaves(Node *n, int8 indentation, int fd) {
 	if (!n) return;
 
 	print_original_node(n, indentation, fd);
 	
 	print_leaves_of_node(n, indentation, fd);
 
-}
-
-static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
-	int i;
-	for (i = 0; i < stack_count && i < 256; i++) {
-
-		if (stack[i] == node) {
-			return 1;
-		}
-	}
-	return 0;
 }
 
 void print_tree(int fd, Node *root) {
@@ -152,30 +246,6 @@ Node *create_root_node() {
 	return root;
 }
 
-Node *find_first_child_node(Node *parent) {
-	Node *n;
-	CHECK_NULL(parent, "find_first_child_node() failure, invalid parent node");
-	n = parent->child;
-	CHECK_NULL(parent, "find_first_child_node() failure, no node found");
-	return n;
-}
-
-Node *find_last_child_node_linear(Node *parent) {
-	Node *n;
-	CHECK_NULL(parent, "find_last_child_node() failure, invalid parent node");
-	n = parent->child;
-	if (!n) {
-		return NULL;	
-	}
-	while (n->sibling) {
-		n = n->sibling;
-	}
-	if (!n) {
-		return NULL;
-	}
-	return n;
-}
-
 Node *create_new_node(Node *parent, char *path) {
 	Node *new, *last;
 	size_t size;
@@ -209,49 +279,8 @@ Node *create_new_node(Node *parent, char *path) {
 	return new;
 }
 
-Leaf *find_first_leaf(Node *parent) {
-	Leaf *l;
-	CHECK_NULL(parent, "find_first_leaf() failure, invalid parent node");
-	if (!parent->leaf)
-		return NULL;
-	l = parent->leaf;
-
-	if (!l) {
-		fprintf(stderr, "find_first_leaf() failure, invalid leaf found\n");
-		return NULL;
-	}
-	return l;
-}
-
-Leaf *find_last_leaf_linear(Node *parent) {
-	Leaf *l;
-	CHECK_NULL(parent, "find_last_leaf() failure, invalid parent node");
-	
-	if (!parent->leaf)
-		return NULL;
-	for (l = parent->leaf; l->sibling; l = l->sibling);
-	if (!l) {
-		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
-		return NULL;
-	}
-	return l;
-}
-
-static uint32_t fnv1a_hash(const char *key) {
-	uint32_t hash = 2166136261u;
-	while (*key) {
-		hash ^= (uint32_t)*key++;
-		hash *= 16777619u;
-	}
-	return hash % HASH_TABLE_SIZE;
-}
-
-void hash_table_init() {
-	zero((char *)hash_table, (size_t)sizeof(hash_table));
-}
-
-void add_leaf_to_table(Leaf *leaf) {	
-	uint32_t index = fnv1a_hash(leaf->key);
+static void add_leaf_to_table(Leaf *leaf) {	
+	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
 	HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
 	zero((char *)entry, (size_t)sizeof(HashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
@@ -260,7 +289,7 @@ void add_leaf_to_table(Leaf *leaf) {
 	hash_table[index] = entry;
 }
 
-Leaf *create_new_leaf_prototype(Node *parent, char *key) {
+static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	Leaf *last, *new;
 	size_t size;
 	CHECK_NULL(parent, "create_new_leaf() failure, invalid parent node");
@@ -330,44 +359,6 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	return new;
 }
 
-Leaf *find_leaf_hash(char *key) {
-	uint32_t index = fnv1a_hash(key);
-	HashEntry *entry = hash_table[index];
-	while (entry) {
-		if (!strcmp(entry->key, key)) {
-			return entry->leaf;
-		}
-		entry = entry->next;
-	}
-	return NULL;
-}
-
-Leaf *find_leaf_linear(Node *root, char *key) {
-	Node *n;
-	Leaf *l;
-	for (n = root; n; n = n->child) {
-		l = find_first_leaf(n);
-		while (l) {
-			if (!strcmp(l->key, key)) {
-				return l;
-			}
-			l = l->sibling;
-		}
-	}
-	return NULL;
-}
-
-Node *find_node_linear(Node *root, char *path) {
-	Node *n;
-	for (n = root; n; n = n->child) {
-		if (strstr(n->path, path)) {
-			return n;
-		}
-	}
-	return NULL;
-}
-
-
 void print_node(Node *n) {
 	if (!n) {
 		printf("Invalid node\n");
@@ -413,7 +404,7 @@ void print_leaf(Leaf *l) {
 	
 void free_leaf(Leaf *leaf) {
 	if (!leaf) return;
-	uint32_t index = fnv1a_hash(leaf->key);
+	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
 	HashEntry *entry = hash_table[index];
 	HashEntry *prev = NULL;
 	while (entry) {
