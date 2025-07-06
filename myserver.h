@@ -44,20 +44,20 @@ struct sFile {
 
 typedef struct sFile File;
 
-void sigint_handler(int);
-int server_init(const char *, int);
-int cli_accept(int);
-int http_headers(int, int);
-int http_response(int, const char *, const char*);
-File *read_file(const char *);
-http_req *http_parse(char *);
-char *read_cli_header(int);
-char *get_mime_type(const char*);
-void sanitize_input(char *, size_t, const char *);
-int send_file(int, const char *, File *);
-void url_decode(char *, const char *, size_t);
+// void sigint_handler(int);
+// int server_init(const char *, int);
+// int cli_accept(int);
+// int http_headers(int, int);
+// int http_response(int, const char *, const char*);
+// File *read_file(const char *);
+// http_req *http_parse(char *);
+// char *read_cli_header(int);
+// char *get_mime_type(const char*);
+// void sanitize_input(char *, size_t, const char *);
+// int send_file(int, const char *, File *);
+// void url_decode(char *, const char *, size_t);
 void clean_up(int, ...);
-char *read_client_body(int, const char *);
-int cli_connection(int);
+// char *read_client_body(int, const char *);
+// int cli_connection(int);
 int start_server(int, char **);
 

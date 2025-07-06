@@ -20,15 +20,6 @@ int main(int argc, char* argv[]) {
 	Leaf *leaf4 = create_new_leaf_binary(users, "data", binary_data, 3);
 
 
-
-/*
-	print_leaf(leaf1);
-	print_leaf(leaf2);
-	print_leaf(leaf3);
-	print_leaf(leaf4);
-	print_node(docs);
-*/
-
 	print_node(temp);
 
 	print_tree(1, root);
