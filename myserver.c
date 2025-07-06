@@ -98,7 +98,7 @@ int http_headers(int cli_fd, int code) {
 	return 1;
 }
 
-int http_response(int cli_fd, char *content_type, char *data) {
+int http_response(int cli_fd, const char *content_type, const char *data) {
 	char buf[2048];
 	ssize_t bytes;
 	memset(buf, 0, sizeof(buf));
@@ -118,11 +118,11 @@ int http_response(int cli_fd, char *content_type, char *data) {
 	return 1;
 }
 
-File *read_file(char *file_name) {
+File *read_file(const char *file_name) {
 	File *f = malloc(sizeof(File));
 	if (!f) {
 		error = "read_file() malloc failure";
-		return 0;
+		return NULL;
 	}
 	memset(f, 0, sizeof(File));
 	strncpy(f->file_name, file_name, sizeof(f->file_name) - 1);
@@ -131,17 +131,15 @@ File *read_file(char *file_name) {
 
 	if (f->fd < 0) {
 		fprintf(stderr, "read_file: Failed to open %s: %s\n", file_name, strerror(errno));
-		error = "read_file() open failure";
 		free(f);
-		return 0;
+		return NULL;
 	}
 	struct stat st;
 	if (fstat(f->fd, &st) < 0) {
 		fprintf(stderr, "read_file: Failed to stat %s: %s\n", file_name, strerror(errno));
-		error = "read_file() fstat failure";
 		close(f->fd);
 		free(f);
-		return 0;
+		return NULL;
 	}
 	f->size = st.st_size;
 	return f;
@@ -152,7 +150,7 @@ http_req *http_parse(char *str) {
 	http_req *req = malloc(sizeof(http_req));
 	if (!req) {
 		error = "http_parse() malloc failure";
-		return 0;
+		return NULL;
 	}
 	memset(req, 0, sizeof(http_req));
 	char *p, *method_start = str, *url_start;
@@ -161,43 +159,41 @@ http_req *http_parse(char *str) {
 	if (*p != ' ') {
 		error = "http_parse() NOSPACE error";
 		free(req);
-		return 0;	
+		return NULL;	
 	}
 	size_t method_len = p - method_start;
 	if (method_len >= METHOD_LENGTH) method_len = METHOD_LENGTH - 1;
 	
 	strncpy(req->method, method_start, method_len);
-	req->method[method_len] = '\0';
 
 	url_start = p + 1;
 	for (p = url_start; *p && *p != ' '; p++);
 	if (*p != ' ') {
 		error = "http_parse() NO2ndSPACE error";
 		free(req);
-		return 0;
+		return NULL;
 	}
 	size_t url_len = p - url_start;
 	if (url_len >= URL_LENGTH) url_len = URL_LENGTH - 1;
 	
 	strncpy(req->url, url_start, url_len);
-	req->url[url_len] = '\0';
 
 	return req;
 }
 
-char *cli_read(int cli_fd) {
+char *read_cli_header(int cli_fd) {
 	char *buf = malloc(4096);
 	if (!buf) {
-		error = "cli_read() malloc failure";
-		return 0;
+		error = "read_cli_header() malloc failure";
+		return NULL;
 	}
 	size_t capacity = 4096, used = 0, max_size = 8192;
 	while (used < max_size) {
 		ssize_t n = read(cli_fd, buf + used, capacity - used - 1);
 		if (n < 0) {
-			error = "cli_read() read failure";
+			error = "read_cli_header() read failure";
 			free(buf);
-			return 0;
+			return NULL;
 		}
 		if (n == 0) 
 			break;
@@ -207,22 +203,22 @@ char *cli_read(int cli_fd) {
 			break;
 		if (used >= capacity - 1) {
 			if (capacity >= max_size) {
-				error = "cli_read() request too large";
+				error = "read_cli_header() request too large";
 				free(buf);
-				return 0;
+				return NULL;
 			}
 			capacity *= 2;
 			char *temp = realloc(buf, capacity);
 			if (!temp) {
-				error = "cli_read() realloc failure";
+				error = "read_cli_header() realloc failure";
 				free(buf);
-				return 0;
+				return NULL;
 			}
 			buf = temp;
 		}
 	}
 
-	return used > 0 ? buf : 0;
+	return used > 0 ? buf : NULL;
 }
 
 char *get_mime_type(const char *url) {
@@ -244,31 +240,29 @@ char *get_mime_type(const char *url) {
 	return "application/octet-stream";
 }
 
-char *sanitize_input(char *body) {
-	static char sanitized[1024];
+void sanitize_input(char *dest, size_t dest_size, const char *body) {
 	size_t i, j = 0;
-	for (i = 0; body[i] && j < sizeof(sanitized) - 6; i++) {
+	for (i = 0; body[i] && j < dest_size - 6; i++) {
 		if (body[i] == '<') {
-			strcpy(&sanitized[j], "&lt;");
+			strcpy(&dest[j], "&lt;");
 			j += 4;
 		} else if (body[i] == '>') {
-			strcpy(&sanitized[j], "&gt;");
+			strcpy(&dest[j], "&gt;");
 			j += 4;
 		} else if (body[i] == '&') {
-			strcpy(&sanitized[j], "&amp;");
+			strcpy(&dest[j], "&amp;");
 			j += 5;
 		} else if (body[i] == '"') {
-			strcpy(&sanitized[j], "&quot;");
+			strcpy(&dest[j], "&quot;");
 			j += 6;
 		} else {
-			sanitized[j++] = body[i];
+			dest[j++] = body[i];
 		}
 	}
-	sanitized[j] = '\0';
-	return sanitized;
+	dest[j] = '\0';
 }
 
-int send_file(int cli_fd, char *mime_type, File *file) {
+int send_file(int cli_fd, const char *mime_type, File *file) {
 	char buf[8192];
 	if (!file || file->fd < 0) return 0;
 	off_t remaining = file->size;
@@ -350,26 +344,24 @@ void clean_up(int cli_fd, ...) {
 	va_end(args);
 }
 
-char *read_client_body(int cli_fd, char *p) {
+char *read_client_body(int cli_fd, const char *p) {
 	char *content_len = strstr(p, "Content-Length: ");
 	if (content_len) {
 		int len = atoi(content_len + 16);	
 		if (len > 0 && len <= 1024) {
-			char *body = NULL;
-			body = malloc(len + 1);
+			char *body = malloc(len + 1);
 			if (!body) {
-				error = "cli_connection body malloc failure";
-				free(p);
+				error = "read_client_body() malloc failure";
 				return 0;
 			}
 			size_t body_read = 0;
 			char *body_start = strstr(p, "\r\n\r\n");
 			if (body_start) {
 				body_start += 4;
-				size_t header_body_len = strlen(body_start);
-				if (header_body_len > 0) {
-					memcpy(body, body_start, header_body_len);
-					body_read = header_body_len;
+				size_t body_len = strlen(body_start);
+				if (body_len > 0) {
+					memcpy(body, body_start, body_len);
+					body_read = body_len;
 				}
 			}
 			while (body_read < len) {
@@ -395,12 +387,11 @@ char *read_client_body(int cli_fd, char *p) {
 
 int cli_connection(int cli_fd) {	
 	http_req *req;
-	// char *res;
-	char str[96];
+	char file_url[96];
 	File *f;
 	char *body = NULL;
 
-	char *p = cli_read(cli_fd);
+	char *p = read_cli_header(cli_fd);
 	if (!p) {
 		fprintf(stderr, "%s\n", error);	
 		close (cli_fd);
@@ -420,8 +411,9 @@ int cli_connection(int cli_fd) {
 	if (!strcmp(req->method, "POST") && !strcmp(req->url, "/api/submit")) {
 		if (body) {
 			char buf[2048];
-			char *sanitized = sanitize_input(body);
-
+			char sanitized[1024];
+			sanitize_input(sanitized, sizeof(sanitized), body);
+			
 			snprintf(buf, sizeof(buf),
 				"<html><body><h1>Submitted Data</h1><p>%s</p><a href='/'>Back</a></body></html>"
 				, sanitized);
@@ -443,9 +435,9 @@ int cli_connection(int cli_fd) {
 	else if (!strcmp(req->method, "GET") && !strncmp(req->url, "/static/", 8)) {	
 		fprintf(stderr, "Serving static file: %s\n", req->url);
 	
-		memset(str, 0, sizeof(str));
-		snprintf(str, sizeof(str) - 1, "%s", req->url + 1);
-		if (strstr(str, "..")) {
+		memset(file_url, 0, sizeof(file_url));
+		snprintf(file_url, sizeof(file_url) - 1, "%s", req->url + 1);
+		if (strstr(file_url, "..")) {
 			if (!http_headers(cli_fd, 403))
 				fprintf(stderr, "%s\n", error);
 			if (!http_response(cli_fd, "text/plain", "Forbidden"))
@@ -453,17 +445,16 @@ int cli_connection(int cli_fd) {
 			clean_up(cli_fd, req, NULL);
 			return 0;
 		}
-		f = read_file(str);
+		f = read_file(file_url);
 		if (!f) {
-			fprintf(stderr, "Failed to read file: %s (%s)\n", str, error);
-			
+			fprintf(stderr, "Failed to read file: %s (%s)\n", file_url, error);
 			if (!http_headers(cli_fd, 404))
 				fprintf(stderr, "%s\n", error);
 			if (!http_response(cli_fd, "text/plain", "File not found"))
 				fprintf(stderr, "%s\n", error);
 		} else {
 			char *mime_type = get_mime_type(req->url);
-			fprintf(stderr, "Serving file %s with MIME type %s\n", str, mime_type);
+			fprintf(stderr, "Serving file %s with MIME type %s\n", file_url, mime_type);
 			
 			if (!send_file(cli_fd, mime_type, f)) {
 				if (!http_headers(cli_fd, 500))
@@ -645,81 +636,5 @@ int start_server(int argc, char *argv[]) {
 	}
 	return 0;
 }
-
-/*
-int main(int argc, char *argv[]) {
-	Node *root = create_root_node();
-	Node *node = create_new_node(root, "users");
-	Node *node2 = create_new_node(node, "login");
-	Node *node3 = create_new_node(node2, "temp");
-	char *val = "duong";
-	char *val2 = "riley";
-	char *val3 = "lewis";
-	char *val4 = "saylor";
-
-	Leaf *leaf = create_new_leaf(node2, "danny", val, (int16)strlen(val));
-	Leaf *leaf2 = create_new_leaf(node2, "lindsey", val2, (int16)strlen(val2));
-	Leaf *leaf3 = create_new_leaf(node, "shawn", val3, (int16)strlen(val3));
-	Leaf *leaf4 = create_new_leaf(node3, "michael", val4, (int16)strlen(val4));
-	print_tree(1, root);
-	
-	print_leaf(find_leaf(root, "shawn"));
-
-	print_node(find_node(root, "temp"));
-
-	return 0;
-
-
-	struct sigaction sa;
-	sa.sa_handler = sigint_handler;
-	sa.sa_flags = 0;
-	sigemptyset(&sa.sa_mask);
-	if (sigaction(SIGINT, &sa, NULL) == -1) {
-		fprintf(stderr, "Failed to set SIGINT handler: %s\n", strerror(errno));
-		return -1;
-	}
-
-	int serv_fd, cli_fd;
-	const char *bind_addr = LOCAL_HOST;
-	if (argc < 2) { 
-		fprintf(stderr, "Usage: %s <listening port> [bind_addr]\n", argv[0]);
-		return -1;
-	}
-	char *port_number = argv[1];
-	serv_fd = server_init(bind_addr, atoi(port_number));
-	if (serv_fd <= 0) {
-		fprintf(stderr, "Server initialization failed: %s\n", error);
-		return -1;	
-	}
-	printf("Listening on %s:%s\n", bind_addr, port_number); 
-	
-	while (keep_running) {
-		cli_fd = cli_accept(serv_fd);	
-		if (!cli_fd) {
-			if (!keep_running) break;
-			fprintf(stderr, "%s\n", error);
-			continue;
-		}
-		printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
-
-	
-		if (!fork()) {
-			
-			close(serv_fd);
-			if (!cli_connection(cli_fd)) {
-				fprintf(stderr, "%s\n", error);
-			}
-			exit(0);
-		}
-		close(cli_fd);
-	}
-	printf("Shutting down server...\n");
-	if (close(serv_fd) == -1) {
-		fprintf(stderr, "Failed to close server socket: %s\n", strerror(errno));
-	}
-	return 0;
-
-}
-*/
 
 #pragma GCC diagnostic pop
