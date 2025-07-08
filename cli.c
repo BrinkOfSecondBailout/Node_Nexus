@@ -10,11 +10,14 @@ Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
+	{ (char *)"back", back_handle },
+	{ (char *)"root", root_handle },
+	{ (char *)"curr", curr_handle },
 	
 };
 
 int32 hello_handle(Client *cli, char *folder, char *args) {
-	dprintf(cli->s, "hello back!\n");
+	dprintf(cli->s, "hello back!\n\n");
 	return 0;
 }
 
@@ -22,6 +25,10 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	dprintf(cli->s, "-- 'help' - list all available command apis\n");
 	dprintf(cli->s, "-- 'tree' - show all current folders and files\n");
 	dprintf(cli->s, "-- 'newdir <name>' - add new directory in current folder\n");
+	dprintf(cli->s, "-- 'back' - jump back one directory\n");
+	dprintf(cli->s, "-- 'root' - jump back to root directory\n");
+	dprintf(cli->s, "-- 'curr' - list current directory\n");
+
 	return 0;
 }
 
@@ -31,15 +38,41 @@ int32 tree_handle(Client *cli, char *folder, char *args) {
 }
 
 int32 newdir_handle(Client *cli, char *folder, char *args) {
+	if ((strlen(folder) < 1)) {
+		dprintf(cli->s, "Please enter a name for new directory\n");
+		return 1;
+	}
 	Node *temp = create_new_node(curr_node, folder);
 	if (temp) {
-		dprintf(cli->s, "Successfully created new directory %s in current folder %s\n", folder, curr_node->path);
+		dprintf(cli->s, "Successfully created new directory '%s' in current folder '%s'\n", folder, curr_node->path);
 		curr_node = temp;
 	} else {
-		dprintf(cli->s, "Unsuccessful at creating new directory %s in current folder %s.. Please try again..\n", folder, curr_node->path);
+		dprintf(cli->s, "Unsuccessful at creating new directory '%s' in current folder '%s'.. Please try again..\n", folder, curr_node->path);
 	}
 	return 0;
 }
+
+int32 back_handle(Client *cli, char *folder, char *args) {
+	if (curr_node == root) {
+		dprintf(cli->s, "Already at root node '/'\n");
+	} else {
+		curr_node = curr_node->parent;
+		dprintf(cli->s, "Back to %s\n", curr_node->path);
+	}
+	return 0;
+}
+
+int32 root_handle(Client *cli, char *folder, char *args) {
+	curr_node = root;
+	dprintf(cli->s, "Back to root directory '/'\n");
+	return 0;
+}
+
+int32 curr_handle(Client *cli, char *folder, char *args) {
+	dprintf(cli->s, "%s\n", curr_node->path);
+	return 0;
+}
+
 
 Callback get_command(int8 *cmd_name) {
 	int16 n, arrlen;
