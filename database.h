@@ -28,7 +28,8 @@
 		if (strcmp((parent_path), "/") == 0)				\
 			snprintf((dest), (max_len), "/%s", (child_path));	\
 		else								\
-			snprintf((dest), (max_len), "%s/%s", (parent_path), (child_path));	\
+			snprintf((dest), (max_len + 1), "%s/%s",			\
+					(parent_path), (child_path));		\
 	} while (0)
 
 #define CHECK_NULL(ptr, err_message)						\
@@ -98,7 +99,7 @@ struct s_hash_entry {
 	struct s_hash_entry *next;
 };
 
-void zero(char *, size_t);
+void zero(void *, size_t);
 // char *indent(int8);
 // void print_original_node(Node *, int8, int);
 // void print_leaves_of_node(Node *, int8, int);

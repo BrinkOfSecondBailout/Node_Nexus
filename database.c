@@ -5,12 +5,12 @@
 static HashEntry *hash_table[HASH_TABLE_SIZE];
 
 
-void zero(char *buf, size_t size) {
+void zero(void *buf, size_t size) {
 	memset(buf, 0, size);
 }
 
 void hash_table_init() {
-	zero((char *)hash_table, (size_t)sizeof(hash_table));
+	zero((void *)hash_table, (size_t)sizeof(hash_table));
 }
 
 char *indent(int8 n) {
@@ -252,11 +252,11 @@ Node *create_new_node(Node *parent, char *path) {
 	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
 	size = sizeof(Node);
 	new = (Node *)malloc(size);
-	zero((char *)new, size);
+	zero((void *)new, size);
 	char temp_path[MAX_PATH_LEN];
 	size_t parent_len = strlen(parent->path);
 	size_t new_len = strlen(path);	
-	if (parent_len + new_len + 1 >= MAX_PATH_LEN) {
+	if (parent_len + new_len + 2 >= MAX_PATH_LEN) {
 		fprintf(stderr, "Path too long in new node\n");
 		return NULL;
 	}
@@ -282,7 +282,7 @@ Node *create_new_node(Node *parent, char *path) {
 static void add_leaf_to_table(Leaf *leaf) {	
 	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
 	HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
-	zero((char *)entry, (size_t)sizeof(HashEntry));
+	zero((void *)entry, (size_t)sizeof(HashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
 	entry->next = hash_table[index];
@@ -297,7 +297,7 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);
 	new = (Leaf *)malloc(size);
-	zero((char *)new, size);
+	zero((void *)new, size);
 	if (last) {
 		last->sibling = new;
 	} else {
