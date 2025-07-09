@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-
+#define MAX_CONNECTION			50
 #define PORT				"12049"
 #define HOST				"127.0.0.1"
 
@@ -37,4 +37,4 @@ int32 newdir_handle(Client *, char *, char *);
 int32 back_handle(Client *, char *, char *);
 int32 root_handle(Client *, char *, char *);
 int32 curr_handle(Client *, char *, char *);
-
+int32 exit_handle(Client *, char *, char *);

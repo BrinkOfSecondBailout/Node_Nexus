@@ -1,11 +1,11 @@
 /* myserver.c */
 
 #include "myserver.h"
-#include "database.h"
+// #include "database.h"
 
 static volatile int keep_running = 1;
 
-int active_connections = 0;
+static int active_connections = 0;
 
 char *error;
 
@@ -47,7 +47,7 @@ int server_init(const char *bind_addr, int port_number) {
 		close(serv_fd);
 		return 0;
 	}
-	if ((listen(serv_fd, 5)) < 0) {
+	if ((listen(serv_fd, 10)) < 0) {
 		error = "listen() failure";
 		close(serv_fd);
 		return 0;
@@ -586,30 +586,8 @@ int cli_connection(int cli_fd) {
 	return 1;
 }
 
-int start_server(int argc, char *argv[]) {
-	struct sigaction sa;
-	sa.sa_handler = sigint_handler;
-	sa.sa_flags = 0;
-	sigemptyset(&sa.sa_mask);
-	if (sigaction(SIGINT, &sa, NULL) == -1) {
-		fprintf(stderr, "Failed to set SIGINT handler: %s\n", strerror(errno));
-		return -1;
-	}
-
-	int serv_fd, cli_fd;
-	const char *bind_addr = LOCAL_HOST;
-	if (argc < 2) { 
-		fprintf(stderr, "Usage: %s <listening port> [bind_addr]\n", argv[0]);
-		return -1;
-	}
-	char *port_number = argv[1];
-	serv_fd = server_init(bind_addr, atoi(port_number));
-	if (serv_fd <= 0) {
-		fprintf(stderr, "Server initialization failed: %s\n", error);
-		return -1;	
-	}
-	printf("Listening on %s:%s\n", bind_addr, port_number); 
-	
+int start_web_app(int serv_fd) {
+	int cli_fd;
 	while (keep_running) {
 		cli_fd = cli_accept(serv_fd);	
 		if (!cli_fd) {
@@ -619,9 +597,7 @@ int start_server(int argc, char *argv[]) {
 		}
 		printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
 
-	
-		if (!fork()) {
-			
+		if (!fork()) {	
 			close(serv_fd);
 			if (!cli_connection(cli_fd)) {
 				fprintf(stderr, "%s\n", error);
@@ -630,11 +606,35 @@ int start_server(int argc, char *argv[]) {
 		}
 		close(cli_fd);
 	}
+	return 0;
+}
+
+int close_server(int serv_fd) {
 	printf("Shutting down server...\n");
 	if (close(serv_fd) == -1) {
 		fprintf(stderr, "Failed to close server socket: %s\n", strerror(errno));
 	}
 	return 0;
+}
+
+int start_server(const char *bind_addr, int port) {
+	int serv_fd;
+	struct sigaction sa;
+	sa.sa_handler = sigint_handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGINT, &sa, NULL) == -1) {
+		fprintf(stderr, "Failed to set SIGINT handler: %s\n", strerror(errno));
+		return -1;
+	}
+
+	serv_fd = server_init(bind_addr, port);
+	if (serv_fd <= 0) {
+		fprintf(stderr, "Server initialization failed: %s\n", error);
+		return -1;	
+	}
+	printf("Listening on %s:%d\n", bind_addr, port);
+	return serv_fd;
 }
 
 #pragma GCC diagnostic pop
