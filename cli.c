@@ -7,6 +7,7 @@ static Node *root = NULL;
 static Node *curr_node = NULL;
 static char global_buf[1024];
 static volatile int keep_running = 1;
+static volatile int keep_running_child = 1;
 int active_connections = 0;
 
 Command_Handler c_handlers[] = {
@@ -82,7 +83,7 @@ int32 curr_handle(Client *cli, char *folder, char *args) {
 }
 
 int32 exit_handle(Client *cli, char *folder, char *args) {
-	keep_running = 0;
+	keep_running_child = 0;
 	return 0;	
 }
 
@@ -104,7 +105,7 @@ Callback get_command(int8 *cmd_name) {
 void child_loop(Client *cli) {
 	char buf[256] = {0};
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
-	while (keep_running) {
+	while (keep_running_child) {
 		ssize_t n = read(cli->s, buf, 255);
 		if (n <= 0) {
 			dprintf(cli->s, "400 Read error: %s\n", n < 0 ? strerror(errno) : "connection closed");
@@ -142,49 +143,6 @@ void child_loop(Client *cli) {
 		cb(cli, folder, args);
 	}
 }
-/*
-void main_loop(int serv) {
-	struct sockaddr_in addr;
-	int cli;
-	int32 len;
-	char *cli_ip;
-	int16 cli_port;
-	Client *client;
-	pid_t pid;
-
-	cli = accept(serv, (struct sockaddr *)&addr, (unsigned int*)&len);
-	if (cli < 0) {
-		fprintf(stderr, "accept() failure: %s\n", strerror(errno));
-		return;
-	}
-	cli_port = (int16)htons((int)addr.sin_port);
-	cli_ip = inet_ntoa(addr.sin_addr);
-	printf("Connection from %s:%d\n", cli_ip, cli_port);
-	client = (Client *)malloc(sizeof(struct s_client));
-	if (!client) {
-		fprintf(stderr, "malloc() client struct failure\n");
-		return;
-	}
-	client->s = cli;
-	client->port = cli_port;
-	strncpy(client->ip, cli_ip, 15);
-	pid = fork();
-
-	if (pid) {
-		free(client);
-		return;
-	} else {
-		dprintf(cli, "100 - Connected to server\n");
-		dprintf(cli, "Type 'help' to see all available commands\n");
-		bool c_continuation = true;
-		while (c_continuation) {
-			child_loop(client);
-		}
-		close(cli);
-		free(client);
-	}
-}
-*/
 
 Client *build_client_struct() {
 	Client *client = (Client *)malloc(sizeof(Client));
@@ -235,6 +193,7 @@ int start_cli_app(int serv_fd) {
 	int cli_fd;
 	Client *client = build_client_struct();
 	while (keep_running) {
+		if (!keep_running) break;
 		cli_fd = cli_accept_cli(client, serv_fd);
 		if (!cli_fd) {
 			if (!keep_running) break;
@@ -248,8 +207,8 @@ int start_cli_app(int serv_fd) {
 			dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
 			child_loop(client);
 			
-			close(cli_fd);
-			free(client);
+			// close(cli_fd);
+			// free(client);
 			exit(0);
 		}
 		free(client);

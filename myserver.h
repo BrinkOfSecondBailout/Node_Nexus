@@ -59,6 +59,6 @@ typedef struct sFile File;
 void clean_up(int, ...);
 // char *read_client_body(int, const char *);
 // int cli_connection(int);
-int start_web_app(int);
+// int start_web_app(int);
 int start_server(const char *, int);
 int close_server(int);
