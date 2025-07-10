@@ -37,4 +37,6 @@ int32 newdir_handle(Client *, char *, char *);
 int32 back_handle(Client *, char *, char *);
 int32 root_handle(Client *, char *, char *);
 int32 curr_handle(Client *, char *, char *);
+int32 jump_handle(Client *, char *, char *);
+int32 addfile_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);

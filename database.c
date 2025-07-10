@@ -157,19 +157,19 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 			switch (l->type) {
 				case VALUE_STRING:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> '%s'\n",
-						indent(indentation), n->path, l->key, l->value.string);
+						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.string);
 					break;
 				case VALUE_INT:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> %d\n",
-						indent(indentation), n->path, l->key, l->value.integer);
+						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.integer);
 					break;
 				case VALUE_DOUBLE:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> %.2f\n",
-						indent(indentation), n->path, l->key, l->value.floating);
+						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.floating);
 					break;
 				case VALUE_BINARY:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> [binary data, size = %ld]\n",
-						indent(indentation), n->path, l->key, l->value.binary.size);
+						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.binary.size);
 					break;
 			}
 			if (write_str(fd, buf) < 0) {

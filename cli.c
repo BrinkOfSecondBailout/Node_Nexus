@@ -18,6 +18,8 @@ Command_Handler c_handlers[] = {
 	{ (char *)"back", back_handle },
 	{ (char *)"root", root_handle },
 	{ (char *)"curr", curr_handle },
+	{ (char *)"jump", jump_handle },
+	{ (char *)"addfile", addfile_handle},
 	{ (char *)"exit", exit_handle }	
 };
 
@@ -34,6 +36,8 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'back' - jump back one directory\n"
 	"-- 'root' - jump back to root directory\n"
 	"-- 'curr' - list current directory\n"
+	"-- 'jump <dir_name>' - find and navigate to directory by name\n"
+	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary\nfollowed by the file value\n" 
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
@@ -53,7 +57,7 @@ int32 newdir_handle(Client *cli, char *folder, char *args) {
 	}
 	Node *temp = create_new_node(curr_node, folder);
 	if (temp) {
-		dprintf(cli->s, "Successfully created new directory '%s' in current folder '%s'\n", folder, curr_node->path);
+		dprintf(cli->s, "Added new directory '%s' in current folder '%s'\n", folder, curr_node->path);
 		curr_node = temp;
 	} else {
 		dprintf(cli->s, "Unsuccessful at creating new directory '%s' in current folder '%s'.. Please try again..\n", folder, curr_node->path);
@@ -80,6 +84,67 @@ int32 root_handle(Client *cli, char *folder, char *args) {
 int32 curr_handle(Client *cli, char *folder, char *args) {
 	dprintf(cli->s, "%s\n", curr_node->path);
 	return 0;
+}
+
+int32 jump_handle(Client *cli, char *folder, char *args) {
+	if ((strlen(folder) < 1)) {
+		dprintf(cli->s, "Missing folder name\n");
+		return 1;	
+	}
+	Node *node = find_node_linear(root, folder);
+	if (!node) {
+		dprintf(cli->s, "No folder by that name exists\n");
+		return 1;
+	}
+	curr_node = node;
+	dprintf(cli->s, "Found and currently in folder '%s'\n", curr_node->path);
+	return 0;
+}
+
+int32 addfile_handle(Client *cli, char *folder, char *args) {
+	if ((strlen(folder) == 0)) {
+		dprintf(cli->s, "Missing folder name, use 'curr' for current directory\n");
+		return 1;
+	}
+	if ((strlen(args) < 3)) {
+		dprintf(cli->s, "Missing arguments, please include filename, type flag, and file value\n");
+		return 1;
+	}
+	Node *node;
+	if (!strcmp(folder, "curr")) {
+		node = curr_node;
+	} else {
+		node = find_node_linear(root, folder);
+		if (!node) dprintf(cli->s, "Invalid folder name\n");
+	}
+	char name[256] = {0}, flag[8] = {0}, value[1024] = {0};
+	Leaf *leaf;
+
+	char *p = strtok(args, " ");
+	strncpy(name, p, sizeof(name) - 1);
+
+	p = strtok(NULL, " ");
+	strncpy(flag, p, sizeof(flag) - 1);
+	p = strtok(NULL, " ");
+	strncpy(value, p, sizeof(value) - 1);
+	
+	if (!strcmp(flag, "-s")) {
+		leaf = create_new_leaf_string(node, name, value, sizeof(value));		
+	} else if (!strcmp(flag, "-i")) {
+		leaf = create_new_leaf_int(node, name, (int32_t)atoi(value));
+	} else if (!strcmp(flag, "-b")) {
+		leaf = create_new_leaf_binary(node, name, value, sizeof(value));
+	} else {
+		dprintf(cli->s, "Invalid flag, please use -s , -i , -b for string/integer/binary\n");
+		return 1;
+	}
+
+	if (!leaf) {
+		dprintf(cli->s, "Unable to create new file.. please try again..\n");
+		return 1;
+	}
+	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
+	return 0;	
 }
 
 int32 exit_handle(Client *cli, char *folder, char *args) {
@@ -109,9 +174,10 @@ void child_loop(Client *cli) {
 		ssize_t n = read(cli->s, buf, 255);
 		if (n <= 0) {
 			dprintf(cli->s, "400 Read error: %s\n", n < 0 ? strerror(errno) : "connection closed");
-			return;
+			break;
 		}
 		buf[n] = '\0';
+		if (strcmp(buf, "quit\n") == 0) break;
 
 		// Parse command
 		char *p = strtok(buf, " \n\r");
@@ -135,7 +201,7 @@ void child_loop(Client *cli) {
 
 		// dprintf(cli->s, "\ncmd: %s\nfolder: %s\nargs: %s\n", cmd, folder, args);
 		
-		Callback cb = get_command(cmd);
+		Callback cb = get_command((int8 *)cmd);
 		if (!cb) {
 			dprintf(cli->s, "400 Command not found: %s\n", cmd);
 			continue;

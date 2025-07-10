@@ -28,7 +28,7 @@
 		if (strcmp((parent_path), "/") == 0)				\
 			snprintf((dest), (max_len), "/%s", (child_path));	\
 		else								\
-			snprintf((dest), (max_len + 1), "%s/%s",			\
+			snprintf((dest), (max_len), "%s/%s",			\
 					(parent_path), (child_path));		\
 	} while (0)
 
