@@ -9,7 +9,7 @@
 #define MAX_CONNECTION			50
 #define PORT				"12049"
 #define HOST				"127.0.0.1"
-
+#define MAX_FILE_UPLOAD			65536
 typedef unsigned int int32;
 typedef unsigned short int int16;
 typedef unsigned char int8;

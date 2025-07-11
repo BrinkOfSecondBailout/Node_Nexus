@@ -2,6 +2,7 @@
 #include "database.h"
 #include "cli.h"
 #include "myserver.h"
+#include "base64.h"
 
 static Node *root = NULL;
 static Node *curr_node = NULL;
@@ -37,7 +38,7 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'root' - jump back to root directory\n"
 	"-- 'curr' - list current directory\n"
 	"-- 'jump <dir_name>' - find and navigate to directory by name\n"
-	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary\nfollowed by the file value\n" 
+	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 64KB* (or if -f, file path)\n" 
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
@@ -101,6 +102,7 @@ int32 jump_handle(Client *cli, char *folder, char *args) {
 	return 0;
 }
 
+
 int32 addfile_handle(Client *cli, char *folder, char *args) {
 	if ((strlen(folder) == 0)) {
 		dprintf(cli->s, "Missing folder name, use 'curr' for current directory\n");
@@ -117,7 +119,8 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		node = find_node_linear(root, folder);
 		if (!node) dprintf(cli->s, "Invalid folder name\n");
 	}
-	char name[256] = {0}, flag[8] = {0}, value[1024] = {0};
+	char name[256] = {0}, flag[8] = {0};
+	char *value = (char *)malloc(MAX_FILE_UPLOAD);
 	Leaf *leaf;
 
 	char *p = strtok(args, " ");
@@ -126,24 +129,45 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	p = strtok(NULL, " ");
 	strncpy(flag, p, sizeof(flag) - 1);
 	p = strtok(NULL, " ");
-	strncpy(value, p, sizeof(value) - 1);
-	
+	strncpy(value, p, MAX_FILE_UPLOAD - 1);
 	if (!strcmp(flag, "-s")) {
 		leaf = create_new_leaf_string(node, name, value, sizeof(value));		
 	} else if (!strcmp(flag, "-i")) {
 		leaf = create_new_leaf_int(node, name, (int32_t)atoi(value));
 	} else if (!strcmp(flag, "-b")) {
-		leaf = create_new_leaf_binary(node, name, value, sizeof(value));
+		size_t decoded_len;
+		unsigned char *decoded = base64_decode(value, strlen(value), &decoded_len);
+		if (!decoded) {
+			dprintf(cli->s, "Base64 decoding failed\n");
+			return 1;
+		}
+		leaf = create_new_leaf_binary(node, name, decoded, decoded_len);
+		free(decoded);
+	} else if (!strcmp(flag, "-f")) {
+		FILE *f = fopen(value, "rb");
+		if (!f) {
+			dprintf(cli->s, "Cannot open file from designated path %s\n", value);
+			return 1;
+		}
+		fseek(f, 0, SEEK_END);
+		size_t size = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		char *data = malloc(size);
+		fread(data, 1, size, f);
+		fclose(f);
+		
+		leaf = create_new_leaf_binary(node, name, data, size);
+		free(data);
 	} else {
 		dprintf(cli->s, "Invalid flag, please use -s , -i , -b for string/integer/binary\n");
 		return 1;
 	}
-
 	if (!leaf) {
-		dprintf(cli->s, "Unable to create new file.. please try again..\n");
+		dprintf(cli->s, "Unable to add file %s.. please try again..\n", name);
 		return 1;
 	}
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
+	free(value);
 	return 0;	
 }
 
