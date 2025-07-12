@@ -21,6 +21,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"curr", curr_handle },
 	{ (char *)"jump", jump_handle },
 	{ (char *)"addfile", addfile_handle},
+	{ (char *)"open", open_handle},
 	{ (char *)"exit", exit_handle }	
 };
 
@@ -39,6 +40,7 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'curr' - list current directory\n"
 	"-- 'jump <dir_name>' - find and navigate to directory by name\n"
 	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 64KB* (or if -f, file path)\n" 
+	"-- 'open <file_name>' - find and open file by name\n"
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
@@ -171,6 +173,22 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	return 0;	
 }
 
+int32 open_handle(Client *cli, char *folder, char *args) {
+	Leaf *leaf;
+	if ((strlen(folder) < 1)) {
+		dprintf(cli->s, "Please provide a file name to open\n");
+		return 1;
+	}
+	leaf = find_leaf_by_hash(folder);
+	if (!leaf) {
+		dprintf(cli->s, "Unable to find file by name '%s'\n", folder);
+		return 1;
+	}
+	dprintf(cli->s, "\nSuccessfully found file '%s'\n", folder);
+	print_leaf(cli->s, leaf);	
+	return 0;
+}
+
 int32 exit_handle(Client *cli, char *folder, char *args) {
 	keep_running_child = 0;
 	return 0;	
@@ -191,10 +209,21 @@ Callback get_command(int8 *cmd_name) {
 	return NULL;
 }
 
+void zero_multiple(void *buf,...) {
+	va_list args;
+	va_start(args, buf);
+	void *ptr;
+	while ((ptr = va_arg(args, void *)) != NULL) {
+		zero(ptr, sizeof(*ptr));
+	}
+	va_end(args);
+}
+
 void child_loop(Client *cli) {
 	char buf[256] = {0};
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
 	while (keep_running_child) {
+		zero_multiple(buf, cmd, folder, args, NULL);
 		ssize_t n = read(cli->s, buf, 255);
 		if (n <= 0) {
 			dprintf(cli->s, "400 Read error: %s\n", n < 0 ? strerror(errno) : "connection closed");

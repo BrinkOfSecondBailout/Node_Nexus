@@ -121,7 +121,7 @@ Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
 Node *find_node_linear(Node *, char *);
 Leaf *find_leaf_linear(Node *, char *);
 void print_node(Node *);
-void print_leaf(Leaf *);
+void print_leaf(int, Leaf *);
 void free_leaf(Leaf *);
 void free_node(Node *);
 void hash_table_init();

@@ -361,10 +361,10 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 
 void print_node(Node *n) {
 	if (!n) {
-		printf("Invalid node\n");
+		printf("Invalid directory\n");
 	} else {
-		printf("**Node**\n");
-		printf("Path: %s\n", n->path);
+		printf("**FOLDER**\n");
+		printf("Folder path: %s\n", n->path);
 		if (n->child)
 			printf("Folder has files inside\n");
 		else
@@ -374,31 +374,34 @@ void print_node(Node *n) {
 	return;
 }
 
-void print_leaf(Leaf *l) {
+void print_leaf(int cli_fd, Leaf *l) {
+	char header[512];
+	char body[1024];
 	if (!l) {
-		printf("Invalid leaf\n");
-	} else {
-		printf("**Leaf**\n");
-		printf("Path: %s\n", l->parent->path);
-		printf("Key: %s\n", l->key);
-		printf("Value: ");
-		switch(l->type) {
-			case VALUE_STRING:
-				printf("'%s' (string)\n", l->value.string);
-				break;
-			case VALUE_INT:
-				printf("%d (integer)\n", l->value.integer);
-				break;
-			case VALUE_DOUBLE:
-				printf("%.2f (double)\n", l->value.floating);
-				break;
-			case VALUE_BINARY:
-				printf("[binary data, size=%ld]\n", l->value.binary.size);
-				break;
-		}
-
-		printf("\n");
+		dprintf(cli_fd, "Invalid file\n");
+		fprintf(stderr, "Invalid file\n");
+		return;
 	}
+	snprintf(header, sizeof(header) - 1, "**FILE**\n%s\n%s\n", l->parent->path, l->key);
+	switch(l->type) {
+		case VALUE_STRING:
+			snprintf(body, sizeof(body) - 1, "'%s'\n", l->value.string);
+			break;
+		case VALUE_INT:
+			snprintf(body, sizeof(body) - 1, "%d\n", l->value.integer);
+			break;
+		case VALUE_DOUBLE:
+			snprintf(body, sizeof(body) - 1, "%.2f\n", l->value.floating);
+			break;
+		case VALUE_BINARY:
+			snprintf(body, sizeof(body) - 1, "[binary data, size=%ld]\n", l->value.binary.size);	
+			break;
+		default:
+			fprintf(stderr, "Cannot read file content\n");
+			snprintf(body, sizeof(body) - 1, "Cannot read file content\n");
+			break;
+	}
+	dprintf(cli_fd, "%s%s", header, body);
 	return;
 }
 	
