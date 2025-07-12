@@ -1,7 +1,7 @@
 C = gcc
 CFLAGS = -Wall -g -O2
 LDFLAGS = 
-SOURCES = cli.c myserver.c database.c
+SOURCES = cli.c myserver.c database.c base64.c
 OBJECTS = $(SOURCES:.c=.o)
 	EXECUTABLE = cli
 

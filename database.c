@@ -1,6 +1,7 @@
 /* database.c */
 
 #include "database.h"
+#include "base64.h"
 
 static HashEntry *hash_table[HASH_TABLE_SIZE];
 
@@ -376,32 +377,44 @@ void print_node(Node *n) {
 
 void print_leaf(int cli_fd, Leaf *l) {
 	char header[512];
-	char body[1024];
+	char body[MAX_BASE64_LEN];
 	if (!l) {
 		dprintf(cli_fd, "Invalid file\n");
 		fprintf(stderr, "Invalid file\n");
 		return;
 	}
-	snprintf(header, sizeof(header) - 1, "**FILE**\n%s\n%s\n", l->parent->path, l->key);
+	snprintf(header, sizeof(header), "**FILE**\n%s\n%s\n", l->parent->path, l->key);
 	switch(l->type) {
 		case VALUE_STRING:
-			snprintf(body, sizeof(body) - 1, "'%s'\n", l->value.string);
+			snprintf(body, sizeof(body), "'%s'\n", l->value.string);
 			break;
 		case VALUE_INT:
-			snprintf(body, sizeof(body) - 1, "%d\n", l->value.integer);
+			snprintf(body, sizeof(body), "%d\n", l->value.integer);
 			break;
 		case VALUE_DOUBLE:
-			snprintf(body, sizeof(body) - 1, "%.2f\n", l->value.floating);
+			snprintf(body, sizeof(body), "%.2f\n", l->value.floating);
 			break;
 		case VALUE_BINARY:
-			snprintf(body, sizeof(body) - 1, "[binary data, size=%ld]\n", l->value.binary.size);	
+			if (l->value.binary.size > (sizeof(body) - 1) / 4 * 3) {
+				snprintf(body, sizeof(body), "Binary data too large to display (%ld bytes)\n", l->value.binary.size);
+			} else {
+				size_t encoded_len;
+				char *encoded = base64_encode(l->value.binary.data, l->value.binary.size, &encoded_len);
+				if (!encoded) {
+					snprintf(body, sizeof(body), "Base64 encoding failed\n");
+				} else {
+					snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n", l->value.binary.size, encoded);
+					free(encoded);
+				}
+			}
 			break;
 		default:
-			fprintf(stderr, "Cannot read file content\n");
-			snprintf(body, sizeof(body) - 1, "Cannot read file content\n");
+			snprintf(body, sizeof(body), "Unknown file type\n");
 			break;
 	}
-	dprintf(cli_fd, "%s%s", header, body);
+	if (dprintf(cli_fd, "%s%s", header, body) < 0) {
+		fprintf(stderr, "print_leaf() dprintf failure: %s\n", strerror(errno));	
+	};
 	return;
 }
 	

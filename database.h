@@ -9,6 +9,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <errno.h>
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -17,6 +18,8 @@
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
 #define HASH_TABLE_SIZE 1024
+#define MAX_BASE64_LEN 65536
+
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
 #define find_last_child_node(x)		find_last_child_node_linear(x)

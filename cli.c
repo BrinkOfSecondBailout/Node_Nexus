@@ -173,19 +173,18 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	return 0;	
 }
 
-int32 open_handle(Client *cli, char *folder, char *args) {
+int32 open_handle(Client *cli, char *key, char *args) {
 	Leaf *leaf;
-	if ((strlen(folder) < 1)) {
-		dprintf(cli->s, "Please provide a file name to open\n");
+	if (strlen(key) < 1 || strlen(key) >= MAX_KEY_LEN || strstr(key, "/") || strstr(key, "..")) {
+		dprintf(cli->s, "Invalid file name, must be non-empty < %d chars, no '/' or '..'\n", MAX_KEY_LEN);
 		return 1;
 	}
-	leaf = find_leaf_by_hash(folder);
+	leaf = find_leaf_by_hash(key);
 	if (!leaf) {
-		dprintf(cli->s, "Unable to find file by name '%s'\n", folder);
+		dprintf(cli->s, "Unable to find file by name '%s'\n", key);
 		return 1;
 	}
-	dprintf(cli->s, "\nSuccessfully found file '%s'\n", folder);
-	print_leaf(cli->s, leaf);	
+	print_leaf(cli->s, leaf);
 	return 0;
 }
 
@@ -349,7 +348,7 @@ int init_root() {
 int main(int argc, char *argv[]) {
 	if (init_root())
 		return 1;
-
+	atexit(base64_cleanup);
 	char *str_port;
 	int port;
 	int serv_fd;
