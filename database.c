@@ -291,13 +291,25 @@ static void add_leaf_to_table(Leaf *leaf) {
 }
 
 static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
-	Leaf *last, *new;
+	
+	Leaf *check, *last, *new;
 	size_t size;
 	CHECK_NULL(parent, "create_new_leaf() failure, invalid parent node");
 	
+	check = find_leaf_by_hash(key);
+	if (check) {
+		fprintf(stderr, "Name already exits\n");
+		return NULL;
+	}
+
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);
 	new = (Leaf *)malloc(size);
+	if (!new) {
+		fprintf(stderr, "create_leaf_prototype malloc() failure");
+		return NULL;
+	}
+
 	zero((void *)new, size);
 	if (last) {
 		last->sibling = new;
@@ -314,6 +326,9 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);	
+	if (!new) {
+		return NULL;
+	}
 
 	new->type = VALUE_STRING;
 	new->value.string = (char *)malloc(count);
@@ -330,6 +345,10 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count)
 Leaf *create_new_leaf_int(Node *parent, char *key, int32_t value) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
+	if (!new) {
+		return NULL;
+	}
+	
 	new->type = VALUE_INT;
 	new->value.integer = value;
 	add_leaf_to_table(new);
@@ -339,6 +358,10 @@ Leaf *create_new_leaf_int(Node *parent, char *key, int32_t value) {
 Leaf *create_new_leaf_double(Node *parent, char *key, double value) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
+	if (!new) {
+		return NULL;
+	}
+
 	new->type = VALUE_DOUBLE;
 	new->value.floating = value;
 	add_leaf_to_table(new);
@@ -348,6 +371,10 @@ Leaf *create_new_leaf_double(Node *parent, char *key, double value) {
 Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
+	if (!new) {
+		return NULL;
+	}
+	
 	new->type = VALUE_BINARY;
 	new->value.binary.data = (void *)malloc(size);
 	if (!new->value.binary.data) {

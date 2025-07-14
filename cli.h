@@ -7,9 +7,9 @@
 #include <string.h>
 
 #define MAX_CONNECTION			50
-#define PORT				"12049"
+#define PORT				"8000"
 #define HOST				"127.0.0.1"
-#define MAX_FILE_UPLOAD			65536
+#define MAX_FILE_UPLOAD			1048576 //1MB
 typedef unsigned int int32;
 typedef unsigned short int int16;
 typedef unsigned char int8;
@@ -29,8 +29,7 @@ struct s_command_handler {
 	char *cmd_name;
 	Callback callback_function;
 };
-
-int32 hello_handle(Client *, char *, char *);
+// int32 temp_handle(Client *, char *, char *);
 int32 help_handle(Client *, char *, char *);
 int32 tree_handle(Client *, char *, char *);
 int32 newdir_handle(Client *, char *, char *);
@@ -40,4 +39,5 @@ int32 curr_handle(Client *, char *, char *);
 int32 jump_handle(Client *, char *, char *);
 int32 addfile_handle(Client *, char *, char *);
 int32 open_handle(Client *, char *, char *);
+int32 save_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);

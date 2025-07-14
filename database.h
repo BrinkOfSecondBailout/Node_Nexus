@@ -18,7 +18,7 @@
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
 #define HASH_TABLE_SIZE 1024
-#define MAX_BASE64_LEN 65536
+#define MAX_BASE64_LEN 1048576 //1MB
 
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)

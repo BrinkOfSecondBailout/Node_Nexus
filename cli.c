@@ -5,14 +5,13 @@
 #include "base64.h"
 
 static Node *root = NULL;
-static Node *curr_node = NULL;
+Node *curr_node = NULL;
 static char global_buf[1024];
 static volatile int keep_running = 1;
 static volatile int keep_running_child = 1;
 int active_connections = 0;
 
 Command_Handler c_handlers[] = {
-	{ (char *)"hello", hello_handle },
 	{ (char *)"help", help_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
@@ -22,13 +21,16 @@ Command_Handler c_handlers[] = {
 	{ (char *)"jump", jump_handle },
 	{ (char *)"addfile", addfile_handle},
 	{ (char *)"open", open_handle},
+	{ (char *)"save", save_handle},
+//	{ (char *)"temp", temp_handle},
 	{ (char *)"exit", exit_handle }	
 };
-
-int32 hello_handle(Client *cli, char *folder, char *args) {
-	dprintf(cli->s, "hello back!\n\n");
+/*
+int32 temp_handle(Client *cli, char *folder, char *args) {
+	dprintf(cli->s, "Root: %p\n", root);
 	return 0;
 }
+*/
 
 int32 help_handle(Client *cli, char *folder, char *args) {
 	zero(global_buf, sizeof(global_buf));
@@ -39,8 +41,9 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'root' - jump back to root directory\n"
 	"-- 'curr' - list current directory\n"
 	"-- 'jump <dir_name>' - find and navigate to directory by name\n"
-	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 64KB* (or if -f, file path)\n" 
+	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 1MB* (or if -f, file path)\n" 
 	"-- 'open <file_name>' - find and open file by name\n"
+	"-- 'save <file_name>' - find and download binary file by name\n"
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
@@ -119,7 +122,10 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		node = curr_node;
 	} else {
 		node = find_node_linear(root, folder);
-		if (!node) dprintf(cli->s, "Invalid folder name\n");
+		if (!node) {
+			dprintf(cli->s, "Invalid folder name\n");
+			return 1;
+		}
 	}
 	char name[256] = {0}, flag[8] = {0};
 	char *value = (char *)malloc(MAX_FILE_UPLOAD);
@@ -165,7 +171,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		return 1;
 	}
 	if (!leaf) {
-		dprintf(cli->s, "Unable to add file %s.. please try again..\n", name);
+		dprintf(cli->s, "Unable to add file %s.. make sure new file name is unique.. please try again..\n", name);
 		return 1;
 	}
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
@@ -180,11 +186,38 @@ int32 open_handle(Client *cli, char *key, char *args) {
 		return 1;
 	}
 	leaf = find_leaf_by_hash(key);
+	//printf("Leaf: %p\n", leaf);	
 	if (!leaf) {
 		dprintf(cli->s, "Unable to find file by name '%s'\n", key);
 		return 1;
 	}
 	print_leaf(cli->s, leaf);
+	return 0;
+}
+
+int32 save_handle(Client *cli, char *key, char *args) {
+	Leaf *leaf;
+	if (strlen(key) < 1 || strlen(key) >= MAX_KEY_LEN || strstr(key, "/") || strstr(key, "..")) {
+		dprintf(cli->s, "Invalid file name, must be non-empty < %d chars, no '/' or '..'\n", MAX_KEY_LEN);
+		return 1;
+	}
+	leaf = find_leaf_by_hash(key);
+	// printf("Leaf: %p\n", leaf);	
+	if (!leaf || leaf->type != VALUE_BINARY) {
+		dprintf(cli->s, "File '%s' not found or not binary\n", key);
+		return 1;
+	}
+	
+	size_t encoded_len;
+	char *encoded = base64_encode(leaf->value.binary.data, leaf->value.binary.size, &encoded_len);
+	if (!encoded) {
+		dprintf(cli->s, "Base64 encoding failed\n");
+		return 1;
+	}
+	if (dprintf(cli->s, "%s\n", encoded) < 0) {
+		fprintf(stderr, "save_handle() dprintf failure: %s\n", strerror(errno));
+	}
+	free(encoded);
 	return 0;
 }
 
@@ -220,6 +253,7 @@ void zero_multiple(void *buf,...) {
 
 void child_loop(Client *cli) {
 	char buf[256] = {0};
+	fprintf(stderr, "child_loop: Client %d, root=%p\n", cli->s, (void*)root);
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
@@ -336,12 +370,14 @@ int start_cli_app(int serv_fd) {
 }
 
 int init_root() {
+	fprintf(stderr, "init_root: Creating root node\n");
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");
 		return 1;
 	}
 	curr_node = root;
+	fprintf(stderr, "init_root: Root node created at %p\n", (void*)root);
 	return 0;
 }
 
