@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/sem.h>
 
 #define MAX_CONNECTION			50
 #define PORT				"8000"

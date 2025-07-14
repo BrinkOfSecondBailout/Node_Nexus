@@ -1,7 +1,6 @@
 /* myserver.c */
 
 #include "myserver.h"
-// #include "database.h"
 
 static volatile int keep_running = 1;
 

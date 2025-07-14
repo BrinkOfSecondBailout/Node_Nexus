@@ -3,8 +3,30 @@
 #include "database.h"
 #include "base64.h"
 
+Node *root = NULL;
 static HashEntry *hash_table[HASH_TABLE_SIZE];
+static void *shared_mem_pool = NULL;
+static size_t shared_mem_size = 0;
+static size_t shared_mem_used = 0;
 
+void *alloc_shared(size_t size) {
+	if (!shared_mem_pool) {
+		shared_mem_size = 1024 * 1024; // 1MB initial size
+		shared_mem_pool = mmap(NULL, shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (shared_mem_pool == MAP_FAILED) {
+			fprintf(stderr, "mmap failed: %s\n", strerror(errno));
+			return NULL;
+		}
+		shared_mem_used = 0;
+	}
+	if (shared_mem_used + size > shared_mem_size) {
+		fprintf(stderr, "Shared memory pool exhausted\n");
+		return NULL;
+	}
+	void *ptr = (char *)shared_mem_pool + shared_mem_used;
+	shared_mem_used += size;
+	return ptr;
+}
 
 void zero(void *buf, size_t size) {
 	memset(buf, 0, size);
@@ -235,15 +257,16 @@ void print_tree(int fd, Node *root) {
 }
 
 Node *create_root_node() {
-	Node *root = (Node *)malloc(sizeof(Node));
+	// Node *root = (Node *)malloc(sizeof(Node));
+	Node *root = alloc_shared(sizeof(Node));
 	CHECK_NULL(root, "Failed to allocate root");
-	
+	zero((void *)root, sizeof(Node));
 	root->parent = NULL;
 	root->sibling = NULL;
 	root->child = NULL;
 	root->leaf = NULL;
-	strncpy(root->path, "/", sizeof(root->path) - 1);
-	root->path[sizeof(root->path) - 1] = '\0';
+	strncpy(root->path, "/", MAX_PATH_LEN - 1);
+	root->path[MAX_PATH_LEN - 1] = '\0';
 	return root;
 }
 
@@ -252,7 +275,9 @@ Node *create_new_node(Node *parent, char *path) {
 	size_t size;
 	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
 	size = sizeof(Node);
-	new = (Node *)malloc(size);
+	//new = (Node *)malloc(size);
+	new = alloc_shared(size);
+	CHECK_NULL(new, "create_new_node() malloc failure");
 	zero((void *)new, size);
 	char temp_path[MAX_PATH_LEN];
 	size_t parent_len = strlen(parent->path);
@@ -282,12 +307,18 @@ Node *create_new_node(Node *parent, char *path) {
 
 static void add_leaf_to_table(Leaf *leaf) {	
 	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
-	HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
+	//HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
+	HashEntry *entry = alloc_shared(sizeof(HashEntry));
+	if (!entry) {
+		fprintf(stderr, "add_leaf_to_table() malloc failure\n");
+		return;
+	}
 	zero((void *)entry, (size_t)sizeof(HashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
 	entry->next = hash_table[index];
 	hash_table[index] = entry;
+	return;
 }
 
 static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
@@ -304,11 +335,9 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);
-	new = (Leaf *)malloc(size);
-	if (!new) {
-		fprintf(stderr, "create_leaf_prototype malloc() failure");
-		return NULL;
-	}
+	//new = (Leaf *)malloc(size);
+	new = alloc_shared(size);
+	CHECK_NULL(new, "create_leaf_prototype() malloc failure\n");
 
 	zero((void *)new, size);
 	if (last) {
@@ -331,11 +360,9 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count)
 	}
 
 	new->type = VALUE_STRING;
-	new->value.string = (char *)malloc(count);
-	if (!new->value.string) {
-		fprintf(stderr, "create_new_leaf() failure, malloc failed\n");
-		return NULL;
-	}
+	//new->value.string = (char *)malloc(count);
+	new->value.string = alloc_shared(count);
+	CHECK_NULL(new->value.string, "create_new_leaf() malloc failed\n");
 	strncpy(new->value.string, value, count);
 	
 	add_leaf_to_table(new);
@@ -376,11 +403,9 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	}
 	
 	new->type = VALUE_BINARY;
-	new->value.binary.data = (void *)malloc(size);
-	if (!new->value.binary.data) {
-		fprintf(stderr, "create_new_leaf_binary() malloc failure");
-		return NULL;
-	}
+	// new->value.binary.data = (void *)malloc(size);
+	new->value.binary.data = alloc_shared(size);
+	CHECK_NULL(new->value.binary.data, "create_leaf_binary() malloc failure\n");
 	memcpy(new->value.binary.data, data, size);
 	new->value.binary.size = size;
 	add_leaf_to_table(new);
@@ -457,12 +482,13 @@ void free_leaf(Leaf *leaf) {
 			} else {
 				hash_table[index] = entry->next;
 			}
-			free(entry);
+			//free(entry);
 			break;
 		}
 		prev = entry;
 		entry = entry->next;
 	}
+	/*
 	switch(leaf->type) {
 		case VALUE_STRING:
 			free(leaf->value.string);
@@ -474,6 +500,7 @@ void free_leaf(Leaf *leaf) {
 			break;
 	}
 	free(leaf);
+	*/
 }
 
 void free_node(Node *node) {
@@ -487,7 +514,7 @@ void free_node(Node *node) {
 	if (node->child) {
 		free_node(node->child);
 	}
-	free(node);
+	// free(node);
 }
 
 void hash_table_free() {
@@ -495,12 +522,21 @@ void hash_table_free() {
 		HashEntry *entry = hash_table[i];
 		while (entry) {
 			HashEntry *next = entry->next;
-			free(entry);
+			//free(entry);
 			entry = next;
 		}
 		hash_table[i] = NULL;
 	}
 }
 
+void cleanup_database(void) {
+	if (shared_mem_pool) {
+		munmap(shared_mem_pool, shared_mem_size);
+		shared_mem_pool = NULL;
+		shared_mem_used = 0;
+		root = NULL;
+		memset(hash_table, 0, sizeof(hash_table));
+	}
+}
 
 #pragma GCC diagnostic pop

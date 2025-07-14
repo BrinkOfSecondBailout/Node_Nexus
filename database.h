@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <errno.h>
+#include <sys/mman.h>
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -129,3 +130,4 @@ void free_leaf(Leaf *);
 void free_node(Node *);
 void hash_table_init();
 void hash_table_free();
+void cleanup_database(void);

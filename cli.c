@@ -4,7 +4,7 @@
 #include "myserver.h"
 #include "base64.h"
 
-static Node *root = NULL;
+extern Node *root;
 Node *curr_node = NULL;
 static char global_buf[1024];
 static volatile int keep_running = 1;
@@ -343,12 +343,13 @@ int cli_accept_cli(Client *client, int serv_fd) {
 
 int start_cli_app(int serv_fd) {
 	int cli_fd;
-	Client *client = build_client_struct();
+	Client *client;
 	while (keep_running) {
-		if (!keep_running) break;
+		client = build_client_struct();
+		if (!client) continue;
 		cli_fd = cli_accept_cli(client, serv_fd);
 		if (!cli_fd) {
-			if (!keep_running) break;
+			free(client);
 			fprintf(stderr, "start_cli_app() failure\n");
 			continue;
 		}
@@ -371,6 +372,7 @@ int start_cli_app(int serv_fd) {
 
 int init_root() {
 	fprintf(stderr, "init_root: Creating root node\n");
+	
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");
@@ -382,9 +384,9 @@ int init_root() {
 }
 
 int main(int argc, char *argv[]) {
-	if (init_root())
-		return 1;
+	if (init_root()) return 1;
 	atexit(base64_cleanup);
+	atexit(cleanup_database);
 	char *str_port;
 	int port;
 	int serv_fd;
