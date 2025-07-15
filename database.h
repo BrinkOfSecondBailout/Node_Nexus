@@ -22,6 +22,7 @@
 #define MAX_BASE64_LEN 1048576 //1MB
 
 
+
 #define find_last_leaf(x)		find_last_leaf_linear(x)
 #define find_last_child_node(x)		find_last_child_node_linear(x)
 #define find_leaf(x)			find_leaf_hash(x)
@@ -86,6 +87,7 @@ struct s_node {
 	struct s_node *child;
 	struct s_node *sibling;
 	Leaf *leaf;
+	char key[MAX_KEY_LEN];
 	char path[MAX_PATH_LEN];
 };
 
@@ -110,6 +112,7 @@ typedef struct SharedMemControl {
 } SharedMemControl;
 
 extern SharedMemControl *mem_control;
+extern Node *root;
 
 void zero(void *, size_t);
 // char *indent(int8);

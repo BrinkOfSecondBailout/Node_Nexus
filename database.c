@@ -124,6 +124,16 @@ Leaf *find_leaf_linear(Node *root, char *key) {
 			}
 			l = l->sibling;
 		}
+		while (n->sibling) {
+			n = n->sibling;
+			l = find_first_leaf(n);
+			while (l) {
+				if (!strcmp(l->key, key)) {
+					return l;
+				}
+				l = l->sibling;
+			}
+		}
 	}
 	return NULL;
 }
@@ -133,6 +143,12 @@ Node *find_node_linear(Node *root, char *path) {
 	for (n = root; n; n = n->child) {
 		if (strstr(n->path, path)) {
 			return n;
+		}
+		while (n->sibling) {
+			n = n->sibling;
+			if (strstr(n->path, path)) {
+				return n;
+			}
 		}
 	}
 	return NULL;
@@ -475,8 +491,33 @@ void print_leaf(int cli_fd, Leaf *l) {
 }
 
 int delete_node(Node *node) {
-	
-	return 0;
+	Node *parent, *first;
+	Node *prev = NULL;
+       	parent = node->parent;
+	first = find_first_child_node(parent);
+	while (first) {
+		if (first == node) {
+			if (first->sibling) {
+				if (prev) {
+					prev->sibling = first->sibling;
+				} else {
+					parent->child = first->sibling;
+				}
+			} else {
+				if (prev) {
+					prev->sibling = NULL;
+				} else {
+					parent->child = NULL;
+				}
+			}
+			free_node(first);
+			return 0;
+		}
+		prev = first;
+		first = first->sibling;
+	}
+	fprintf(stderr, "delete_node() failure, unable to unlink node\n");	
+	return 1;
 }
 
 int delete_leaf(char *name) {
@@ -491,7 +532,7 @@ int delete_leaf(char *name) {
 	parent = leaf->parent;
 	first = find_first_leaf(parent);
 	while (first) {
-		if (strcmp(first->key, name) == 0) {
+		if (first == leaf) {
 			if (first->sibling) {
 				if (prev) {
 					prev->sibling = first->sibling;

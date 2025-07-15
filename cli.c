@@ -4,7 +4,6 @@
 #include "myserver.h"
 #include "base64.h"
 
-extern Node *root;
 Node *curr_node = NULL;
 static char global_buf[1024];
 static volatile int keep_running = 1;
@@ -231,14 +230,42 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 			dprintf(cli->s, "Invalid directory, '%s' not found\n", name);
 			return 1;
 		}
-
+		if (node == root) {
+			dprintf(cli->s, "Cannot delete root directory\n");
+			return 1;
+		}
+		char buffer[256] = {0};
+		dprintf(cli->s, "This will delete '%s' folder and all its contents, proceed?\n~ Y/N ~\n", name);
+		ssize_t n = read(cli->s, buffer, sizeof(buffer) - 1);
+		if (n <= 0) {
+			dprintf(cli->s, "Error reading response: %s\n", n < 0 ? strerror(errno) : "connection closed");
+			return 1;
+		}
+		buffer[n] = '\0';
+		char *newline = strchr(buffer, '\n');
+		if (newline) *newline = '\0';
+		if (!strcmp(buffer, "Y") || !strcmp(buffer, "y") || !strcmp(buffer, "Yes") || !strcmp(buffer, "yes")) {
+			if (delete_node(node)) {
+				dprintf(cli->s, "Unable to delete directory '%s'\n", name);
+				return 1;
+			}
+			dprintf(cli->s, "Directory '%s' deleted\n", name);
+			return 0;
+		} else if (!strcmp(buffer, "N") || !strcmp(buffer, "n") || !strcmp(buffer, "No") || !strcmp(buffer, "no")) {
+			dprintf(cli->s, "Understood.. directory '%s' left untouched\n", name);
+			return 0;
+		} else {
+			dprintf(cli->s, "Invalid response, directory '%s' left untouched\n", name);
+			return 1;
+		}
+		
 
 	} else if (!strcmp(flag, "-f")) {
 		if (delete_leaf(name)) {
 			dprintf(cli->s, "Unable to delete file '%s'\n", name);
 			return 1;
 		}
-		dprintf(cli->s, "Successfully deleted file '%s'\n", name);
+		dprintf(cli->s, "File '%s' deleted..\n", name);
 		return 0;
 	}
 	return 1;
