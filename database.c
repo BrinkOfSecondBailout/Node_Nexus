@@ -5,26 +5,30 @@
 
 Node *root = NULL;
 static HashEntry *hash_table[HASH_TABLE_SIZE];
+/*
 static void *shared_mem_pool = NULL;
 static size_t shared_mem_size = 0;
 static size_t shared_mem_used = 0;
+*/
+SharedMemControl *mem_control = NULL;
 
 void *alloc_shared(size_t size) {
-	if (!shared_mem_pool) {
-		shared_mem_size = 1024 * 1024; // 1MB initial size
-		shared_mem_pool = mmap(NULL, shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-		if (shared_mem_pool == MAP_FAILED) {
+	if (!mem_control->shared_mem_pool) {
+		mem_control->shared_mem_size = 1024 * 1024; // 1MB initial size
+		mem_control->shared_mem_pool = mmap(NULL, mem_control->shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (mem_control->shared_mem_pool == MAP_FAILED) {
 			fprintf(stderr, "mmap failed: %s\n", strerror(errno));
 			return NULL;
 		}
-		shared_mem_used = 0;
+		mem_control->shared_mem_used = 0;
 	}
-	if (shared_mem_used + size > shared_mem_size) {
+	if (mem_control->shared_mem_used + size > mem_control->shared_mem_size) {
 		fprintf(stderr, "Shared memory pool exhausted\n");
 		return NULL;
 	}
-	void *ptr = (char *)shared_mem_pool + shared_mem_used;
-	shared_mem_used += size;
+	void *ptr = (char *)mem_control->shared_mem_pool + mem_control->shared_mem_used;
+	mem_control->shared_mem_used += size;
+	fprintf(stderr, "PID: %d: Mempool size: %ld\n", getpid(), mem_control->shared_mem_used);
 	return ptr;
 }
 
@@ -530,13 +534,18 @@ void hash_table_free() {
 }
 
 void cleanup_database(void) {
-	if (shared_mem_pool) {
-		munmap(shared_mem_pool, shared_mem_size);
-		shared_mem_pool = NULL;
-		shared_mem_used = 0;
-		root = NULL;
-		memset(hash_table, 0, sizeof(hash_table));
+	if (mem_control && mem_control->shared_mem_pool) {
+		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
+		mem_control->shared_mem_pool = NULL;
+		mem_control->shared_mem_used = 0;
+		mem_control->shared_mem_size = 0;
 	}
+	if (mem_control) {
+		munmap(mem_control, sizeof(SharedMemControl));
+		mem_control = NULL;
+	}
+	root = NULL;
+	memset(hash_table, 0, sizeof(hash_table));
 }
 
 #pragma GCC diagnostic pop

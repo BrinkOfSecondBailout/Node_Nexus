@@ -103,6 +103,14 @@ struct s_hash_entry {
 	struct s_hash_entry *next;
 };
 
+typedef struct SharedMemControl {
+	void *shared_mem_pool;
+	size_t shared_mem_size;
+	size_t shared_mem_used;
+} SharedMemControl;
+
+extern SharedMemControl *mem_control;
+
 void zero(void *, size_t);
 // char *indent(int8);
 // void print_original_node(Node *, int8, int);

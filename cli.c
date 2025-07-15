@@ -22,15 +22,8 @@ Command_Handler c_handlers[] = {
 	{ (char *)"addfile", addfile_handle},
 	{ (char *)"open", open_handle},
 	{ (char *)"save", save_handle},
-//	{ (char *)"temp", temp_handle},
 	{ (char *)"exit", exit_handle }	
 };
-/*
-int32 temp_handle(Client *cli, char *folder, char *args) {
-	dprintf(cli->s, "Root: %p\n", root);
-	return 0;
-}
-*/
 
 int32 help_handle(Client *cli, char *folder, char *args) {
 	zero(global_buf, sizeof(global_buf));
@@ -372,10 +365,19 @@ int start_cli_app(int serv_fd) {
 
 int init_root() {
 	fprintf(stderr, "init_root: Creating root node\n");
-	
+	mem_control = mmap(NULL, sizeof(SharedMemControl), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (mem_control == MAP_FAILED) {
+		fprintf(stderr, "mmap failed for mem_control: %s\n", strerror(errno));
+		return 1;
+	}	
+	mem_control->shared_mem_pool = NULL;
+	mem_control->shared_mem_size = 0;
+	mem_control->shared_mem_used = 0;
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");
+		munmap(mem_control, sizeof(SharedMemControl));
+		mem_control = NULL;
 		return 1;
 	}
 	curr_node = root;
