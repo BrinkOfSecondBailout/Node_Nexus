@@ -22,6 +22,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"addfile", addfile_handle},
 	{ (char *)"open", open_handle},
 	{ (char *)"save", save_handle},
+	{ (char *)"kill", kill_handle},
 	{ (char *)"exit", exit_handle }	
 };
 
@@ -34,9 +35,10 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'root' - jump back to root directory\n"
 	"-- 'curr' - list current directory\n"
 	"-- 'jump <dir_name>' - find and navigate to directory by name\n"
-	"-- 'addfile <dir> <filename> -<filetype(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 1MB* (or if -f, file path)\n" 
+	"-- 'addfile <dir> <filename> -<filetype flag(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 1MB* (or if -f, file path)\n" 
 	"-- 'open <file_name>' - find and open file by name\n"
 	"-- 'save <file_name>' - find and download binary file by name\n"
+	"-- 'kill -<flag> <name>' - find file or folder to delete, -d for dir, -f for file\n"
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
@@ -212,6 +214,34 @@ int32 save_handle(Client *cli, char *key, char *args) {
 	}
 	free(encoded);
 	return 0;
+}
+
+int32 kill_handle(Client *cli, char *flag, char *name) {
+	if (strcmp(flag, "-d") && strcmp(flag, "-f")) {
+		dprintf(cli->s, "Invalid flag, use -d for directory or -f for file\n");
+		return 1;
+	}
+	if (strlen(name) < 1) {
+		dprintf(cli->s, "Invalid name argument, enter directory or file name\n");
+		return 1;
+	}
+	if (!strcmp(flag, "-d")) {
+		Node *node = find_node_linear(root, name);
+		if (!node) {
+			dprintf(cli->s, "Invalid directory, '%s' not found\n", name);
+			return 1;
+		}
+
+
+	} else if (!strcmp(flag, "-f")) {
+		if (delete_leaf(name)) {
+			dprintf(cli->s, "Unable to delete file '%s'\n", name);
+			return 1;
+		}
+		dprintf(cli->s, "Successfully deleted file '%s'\n", name);
+		return 0;
+	}
+	return 1;
 }
 
 int32 exit_handle(Client *cli, char *folder, char *args) {

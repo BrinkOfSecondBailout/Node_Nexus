@@ -473,7 +473,50 @@ void print_leaf(int cli_fd, Leaf *l) {
 	};
 	return;
 }
+
+int delete_node(Node *node) {
 	
+	return 0;
+}
+
+int delete_leaf(char *name) {
+	Leaf *leaf, *first;
+	Leaf *prev = NULL;
+	Node *parent;
+	leaf = find_leaf_by_hash(name);
+	if (!leaf) {
+		fprintf(stderr, "delete_leaf() failure, no such file\n");
+		return 1;
+	}
+	parent = leaf->parent;
+	first = find_first_leaf(parent);
+	while (first) {
+		if (strcmp(first->key, name) == 0) {
+			if (first->sibling) {
+				if (prev) {
+					prev->sibling = first->sibling;
+				} else {
+					parent->leaf = first->sibling;
+				}
+			} else {
+				if (prev) {
+					prev->sibling = NULL;
+				} else {
+					parent->leaf = NULL;
+				}
+			}
+			free_leaf(first);
+			return 0;
+		} else {
+			prev = first;
+			first = first->sibling;
+		}
+	}
+	fprintf(stderr, "delete_leaf() failure, unable to unlink leaf\n");	
+	return 1;
+}
+
+
 void free_leaf(Leaf *leaf) {
 	if (!leaf) return;
 	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);

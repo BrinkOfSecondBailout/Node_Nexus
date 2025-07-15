@@ -42,4 +42,5 @@ int32 jump_handle(Client *, char *, char *);
 int32 addfile_handle(Client *, char *, char *);
 int32 open_handle(Client *, char *, char *);
 int32 save_handle(Client *, char *, char *);
+int32 kill_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);
