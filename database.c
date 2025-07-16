@@ -4,12 +4,7 @@
 #include "base64.h"
 
 Node *root = NULL;
-static HashEntry *hash_table[HASH_TABLE_SIZE];
-/*
-static void *shared_mem_pool = NULL;
-static size_t shared_mem_size = 0;
-static size_t shared_mem_used = 0;
-*/
+// static HashEntry *hash_table[HASH_TABLE_SIZE];
 SharedMemControl *mem_control = NULL;
 
 void *alloc_shared(size_t size) {
@@ -37,7 +32,7 @@ void zero(void *buf, size_t size) {
 }
 
 void hash_table_init() {
-	zero((void *)hash_table, (size_t)sizeof(hash_table));
+	zero((void *)mem_control->hash_table, (size_t)sizeof(mem_control->hash_table));
 }
 
 char *indent(int8 n) {
@@ -102,8 +97,10 @@ static Leaf *find_last_leaf_linear(Node *parent) {
 }
 
 Leaf *find_leaf_by_hash(char *key) {
+	printf("Searching for %s\n", key);
 	uint32_t index = HASH_KEY(key, HASH_TABLE_SIZE);
-	HashEntry *entry = hash_table[index];
+	HashEntry *entry = mem_control->hash_table[index];
+	printf("Entry %p\n", entry);
 	while (entry) {
 		if (!strcmp(entry->key, key)) {
 			return entry->leaf;
@@ -336,8 +333,8 @@ static void add_leaf_to_table(Leaf *leaf) {
 	zero((void *)entry, (size_t)sizeof(HashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
-	entry->next = hash_table[index];
-	hash_table[index] = entry;
+	entry->next = mem_control->hash_table[index];
+	mem_control->hash_table[index] = entry;
 	return;
 }
 
@@ -561,14 +558,14 @@ int delete_leaf(char *name) {
 void free_leaf(Leaf *leaf) {
 	if (!leaf) return;
 	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
-	HashEntry *entry = hash_table[index];
+	HashEntry *entry = mem_control->hash_table[index];
 	HashEntry *prev = NULL;
 	while (entry) {
 		if (entry->leaf == leaf) {
 			if (prev) {
 				prev->next = entry->next;
 			} else {
-				hash_table[index] = entry->next;
+				mem_control->hash_table[index] = entry->next;
 			}
 			//free(entry);
 			break;
@@ -607,13 +604,13 @@ void free_node(Node *node) {
 
 void hash_table_free() {
 	for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-		HashEntry *entry = hash_table[i];
+		HashEntry *entry = mem_control->hash_table[i];
 		while (entry) {
 			HashEntry *next = entry->next;
 			//free(entry);
 			entry = next;
 		}
-		hash_table[i] = NULL;
+		mem_control->hash_table[i] = NULL;
 	}
 }
 
@@ -629,7 +626,6 @@ void cleanup_database(void) {
 		mem_control = NULL;
 	}
 	root = NULL;
-	memset(hash_table, 0, sizeof(hash_table));
 }
 
 #pragma GCC diagnostic pop

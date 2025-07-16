@@ -1,6 +1,7 @@
 /* database.h */
 
-// #define NDEBUG
+#ifndef DATABASE_H
+#define DATABASE_H
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -87,7 +88,6 @@ struct s_node {
 	struct s_node *child;
 	struct s_node *sibling;
 	Leaf *leaf;
-	char key[MAX_KEY_LEN];
 	char path[MAX_PATH_LEN];
 };
 
@@ -109,6 +109,7 @@ typedef struct SharedMemControl {
 	void *shared_mem_pool;
 	size_t shared_mem_size;
 	size_t shared_mem_used;
+	HashEntry *hash_table[HASH_TABLE_SIZE];
 } SharedMemControl;
 
 extern SharedMemControl *mem_control;
@@ -144,3 +145,5 @@ void free_node(Node *);
 void hash_table_init();
 void hash_table_free();
 void cleanup_database(void);
+
+#endif

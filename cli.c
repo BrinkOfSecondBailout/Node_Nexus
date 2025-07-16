@@ -407,7 +407,7 @@ int start_cli_app(int serv_fd) {
 
 		if (!fork()) {
 			close(serv_fd);
-			dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
+		//	dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
 			child_loop(client);
 			
 			// close(cli_fd);
@@ -430,6 +430,7 @@ int init_root() {
 	mem_control->shared_mem_pool = NULL;
 	mem_control->shared_mem_size = 0;
 	mem_control->shared_mem_used = 0;
+	hash_table_init();
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");
@@ -438,7 +439,7 @@ int init_root() {
 		return 1;
 	}
 	curr_node = root;
-	fprintf(stderr, "init_root: Root node created at %p\n", (void*)root);
+	fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
 	return 0;
 }
 
