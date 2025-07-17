@@ -554,6 +554,14 @@ int delete_leaf(char *name) {
 	return 1;
 }
 
+void reset_database() {
+	if (root) {
+		free_node(root);
+		root = NULL;
+	}
+	hash_table_init();
+	mem_control->shared_mem_used = 0;
+}
 
 void free_leaf(Leaf *leaf) {
 	if (!leaf) return;

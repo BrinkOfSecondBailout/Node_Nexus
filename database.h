@@ -140,6 +140,7 @@ void print_node(Node *);
 void print_leaf(int, Leaf *);
 int delete_node(Node *);
 int delete_leaf(char *);
+void reset_database();
 void free_leaf(Leaf *);
 void free_node(Node *);
 void hash_table_init();

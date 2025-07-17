@@ -31,7 +31,6 @@ struct s_command_handler {
 	char *cmd_name;
 	Callback callback_function;
 };
-// int32 temp_handle(Client *, char *, char *);
 int32 help_handle(Client *, char *, char *);
 int32 tree_handle(Client *, char *, char *);
 int32 newdir_handle(Client *, char *, char *);
@@ -43,4 +42,5 @@ int32 addfile_handle(Client *, char *, char *);
 int32 open_handle(Client *, char *, char *);
 int32 save_handle(Client *, char *, char *);
 int32 kill_handle(Client *, char *, char *);
+int32 nuke_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);

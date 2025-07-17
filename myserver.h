@@ -27,7 +27,7 @@
 #define URL_LENGTH 128
 #define LOCAL_HOST "127.0.0.1"
 
-
+extern volatile int keep_running;
 
 struct http_request {
 	char method[METHOD_LENGTH];

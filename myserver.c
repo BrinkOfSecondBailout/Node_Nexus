@@ -2,7 +2,7 @@
 
 #include "myserver.h"
 
-static volatile int keep_running = 1;
+volatile int keep_running = 1;
 
 static int active_connections = 0;
 

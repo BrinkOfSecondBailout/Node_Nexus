@@ -6,8 +6,8 @@
 
 Node *curr_node = NULL;
 static char global_buf[1024];
-static volatile int keep_running = 1;
-static volatile int keep_running_child = 1;
+//static volatile int keep_running = 1;
+volatile int keep_running_child = 1;
 int active_connections = 0;
 
 Command_Handler c_handlers[] = {
@@ -22,6 +22,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"open", open_handle},
 	{ (char *)"save", save_handle},
 	{ (char *)"kill", kill_handle},
+	{ (char *)"nuke", nuke_handle},
 	{ (char *)"exit", exit_handle }	
 };
 
@@ -38,6 +39,7 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'open <file_name>' - find and open file by name\n"
 	"-- 'save <file_name>' - find and download binary file by name\n"
 	"-- 'kill -<flag> <name>' - find file or folder to delete, -d for dir, -f for file\n"
+	"-- 'nuke' - delete all files and folders\n"
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
@@ -271,6 +273,43 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 	return 1;
 }
 
+int32 nuke_handle(Client *cli, char *folder, char *args) {
+	char buffer[256] = {0};
+	dprintf(cli->s, "This will delete all files and folders, proceed?\n~ Y/N ~\n");
+	ssize_t n = read(cli->s, buffer, sizeof(buffer) - 1);
+	if (n <= 0) {
+		dprintf(cli->s, "Error reading response: %s\n", n < 0 ? strerror(errno) : "connection closed");
+		return 1;
+	}
+	buffer[n] = '\0';
+	char *newline = strchr(buffer, '\n');
+	if (newline) *newline = '\0';
+	if (!strcmp(buffer, "Y") || !strcmp(buffer, "y") || !strcmp(buffer, "Yes") || !strcmp(buffer, "yes")) {
+		reset_database();
+		
+		root = create_root_node();
+		if (!root) {
+			fprintf(stderr, "create_root_node() failure\n");
+			munmap(mem_control, sizeof(SharedMemControl));
+			mem_control = NULL;
+			return 1;
+		}
+		curr_node = root;
+		
+		dprintf(cli->s, "All files and folders successfully nuked\n");
+		return 0;
+	} else if (!strcmp(buffer, "N") || !strcmp(buffer, "n") || !strcmp(buffer, "No") || !strcmp(buffer, "no")) {
+		dprintf(cli->s, "Understood.. crisis averted\n");
+		return 0;
+	} else {
+		dprintf(cli->s, "Invalid response, nuke command canceled\n");
+		return 1;
+	}
+		
+
+	return 0;
+}
+
 int32 exit_handle(Client *cli, char *folder, char *args) {
 	keep_running_child = 0;
 	return 0;	
@@ -303,7 +342,7 @@ void zero_multiple(void *buf,...) {
 
 void child_loop(Client *cli) {
 	char buf[256] = {0};
-	fprintf(stderr, "child_loop: Client %d, root=%p\n", cli->s, (void*)root);
+	fprintf(stderr, "child_loop: Client %d, root=%p\n", getpid(), (void*)root);
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
@@ -407,11 +446,8 @@ int start_cli_app(int serv_fd) {
 
 		if (!fork()) {
 			close(serv_fd);
-		//	dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
+			dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
 			child_loop(client);
-			
-			// close(cli_fd);
-			// free(client);
 			exit(0);
 		}
 		free(client);
