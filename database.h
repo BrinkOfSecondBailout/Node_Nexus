@@ -21,7 +21,7 @@
 #define MAX_KEY_LEN 128
 #define HASH_TABLE_SIZE 1024
 #define MAX_BASE64_LEN 1048576 //1MB
-
+#define SHARED_MEM_INITIAL_SIZE 1024 * 1024 //1MB
 
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
@@ -103,7 +103,7 @@ struct s_hash_entry {
 	char key[MAX_KEY_LEN];
 	Leaf *leaf;
 	struct s_hash_entry *next;
-};
+}
 
 typedef struct SharedMemControl {
 	void *shared_mem_pool;

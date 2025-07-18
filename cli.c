@@ -6,7 +6,6 @@
 
 Node *curr_node = NULL;
 static char global_buf[1024];
-//static volatile int keep_running = 1;
 volatile int keep_running_child = 1;
 int active_connections = 0;
 

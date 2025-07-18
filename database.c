@@ -4,12 +4,11 @@
 #include "base64.h"
 
 Node *root = NULL;
-// static HashEntry *hash_table[HASH_TABLE_SIZE];
 SharedMemControl *mem_control = NULL;
 
 void *alloc_shared(size_t size) {
 	if (!mem_control->shared_mem_pool) {
-		mem_control->shared_mem_size = 1024 * 1024; // 1MB initial size
+		mem_control->shared_mem_size = SHARED_MEM_INITIAL_SIZE;
 		mem_control->shared_mem_pool = mmap(NULL, mem_control->shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 		if (mem_control->shared_mem_pool == MAP_FAILED) {
 			fprintf(stderr, "mmap failed: %s\n", strerror(errno));
@@ -280,7 +279,6 @@ void print_tree(int fd, Node *root) {
 }
 
 Node *create_root_node() {
-	// Node *root = (Node *)malloc(sizeof(Node));
 	Node *root = alloc_shared(sizeof(Node));
 	CHECK_NULL(root, "Failed to allocate root");
 	zero((void *)root, sizeof(Node));
@@ -298,7 +296,6 @@ Node *create_new_node(Node *parent, char *path) {
 	size_t size;
 	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
 	size = sizeof(Node);
-	//new = (Node *)malloc(size);
 	new = alloc_shared(size);
 	CHECK_NULL(new, "create_new_node() malloc failure");
 	zero((void *)new, size);
@@ -330,7 +327,6 @@ Node *create_new_node(Node *parent, char *path) {
 
 static void add_leaf_to_table(Leaf *leaf) {	
 	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
-	//HashEntry *entry = (HashEntry *)malloc(sizeof(HashEntry));
 	HashEntry *entry = alloc_shared(sizeof(HashEntry));
 	if (!entry) {
 		fprintf(stderr, "add_leaf_to_table() malloc failure\n");
@@ -345,7 +341,6 @@ static void add_leaf_to_table(Leaf *leaf) {
 }
 
 static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
-	
 	Leaf *check, *last, *new;
 	size_t size;
 	CHECK_NULL(parent, "create_new_leaf() failure, invalid parent node");
@@ -358,7 +353,6 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 
 	last = find_last_leaf(parent);
 	size = sizeof(Leaf);
-	//new = (Leaf *)malloc(size);
 	new = alloc_shared(size);
 	CHECK_NULL(new, "create_leaf_prototype() malloc failure\n");
 
@@ -383,7 +377,6 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count)
 	}
 
 	new->type = VALUE_STRING;
-	//new->value.string = (char *)malloc(count);
 	new->value.string = alloc_shared(count);
 	CHECK_NULL(new->value.string, "create_new_leaf() malloc failed\n");
 	strncpy(new->value.string, value, count);
@@ -426,7 +419,6 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	}
 	
 	new->type = VALUE_BINARY;
-	// new->value.binary.data = (void *)malloc(size);
 	new->value.binary.data = alloc_shared(size);
 	CHECK_NULL(new->value.binary.data, "create_leaf_binary() malloc failure\n");
 	memcpy(new->value.binary.data, data, size);
@@ -617,6 +609,10 @@ void free_node(Node *node) {
 }
 
 void hash_table_free() {
+	if (!mem_control) {
+		fprintf(stderr, "hash_table_free: mem_control is NULL\n");
+		return;
+	}
 	for (int i = 0; i < HASH_TABLE_SIZE; i++) {
 		HashEntry *entry = mem_control->hash_table[i];
 		while (entry) {
