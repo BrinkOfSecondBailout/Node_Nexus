@@ -13,7 +13,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <zlib.h>
-
+#include <openssl/sha.h>
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -24,7 +24,8 @@
 #define HASH_TABLE_SIZE 1024
 #define MAX_BASE64_LEN 1048576 //1MB
 #define SHARED_MEM_INITIAL_SIZE 1024 * 1024 //1MB
-
+#define MAX_USERNAME_LEN 32
+#define MAX_USERS 100
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
 #define find_last_child_node(x)		find_last_child_node_linear(x)
@@ -62,6 +63,7 @@
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
 typedef struct s_hash_entry HashEntry;
+typedef struct s_user User;
 
 typedef unsigned int int32;
 typedef unsigned short int int16;
@@ -108,11 +110,18 @@ struct s_hash_entry {
 	struct s_hash_entry *next;
 };
 
+struct s_user {
+	char username[MAX_USERNAME_LEN];
+	unsigned char password_hash[SHA256_DIGEST_LENGTH]; //32bytes
+};
+
 typedef struct SharedMemControl {
 	void *shared_mem_pool;
 	size_t shared_mem_size;
 	size_t shared_mem_used;
 	HashEntry *hash_table[HASH_TABLE_SIZE];
+	User *users[MAX_USERS];
+	size_t user_count;
 } SharedMemControl;
 
 extern SharedMemControl *mem_control;
@@ -137,6 +146,9 @@ Leaf *create_new_leaf_string(Node *, char *, char *, size_t);
 Leaf *create_new_leaf_int(Node *, char *, int32_t);
 Leaf *create_new_leaf_double(Node *, char *, double);
 Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
+User *create_new_user(const char *, const char *);
+User *find_user(const char *);
+int verify_user(const char *, const char *);
 Node *find_node_linear(Node *, char *);
 Leaf *find_leaf_linear(Node *, char *);
 void print_node(Node *);

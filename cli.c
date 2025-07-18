@@ -11,6 +11,8 @@ int active_connections = 0;
 
 Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
+	{ (char *)"register", register_handle },
+	{ (char *)"login", login_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
 	{ (char *)"back", back_handle },
@@ -28,6 +30,8 @@ Command_Handler c_handlers[] = {
 int32 help_handle(Client *cli, char *folder, char *args) {
 	zero(global_buf, sizeof(global_buf));
 	char *instructions = "-- 'help' - list all available command apis\n"
+	"-- 'register <username> <password> - create a new account\n"
+	"-- 'login <username> <password> - log in to an existing account\n"
 	"-- 'tree' - show all current folders and files\n"
 	"-- 'newdir <name>' - add new directory in current folder\n"
 	"-- 'back' - jump back one directory\n"
@@ -45,6 +49,53 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	dprintf(cli->s, "%s\n", global_buf);
 	return 0;
 }
+
+int32 register_handle(Client *cli, char *username, char *args) {
+	if (cli->logged_in) {
+		dprintf(cli->s, "Error: Already logged in as %s\n", cli->username);
+		return 1;
+	}
+	if (strlen(username) < 1 || strlen(username) >= MAX_USERNAME_LEN) {
+		dprintf(cli->s, "Invalid username, must be 1-%d characters\n", MAX_USERNAME_LEN - 1);
+		return 1;	
+	}
+	if (strlen(args) < 1) {
+		dprintf(cli->s, "Missing password\n");
+		return 1;
+	}
+	User *user = create_new_user(username, args);
+	if (!user) {
+		dprintf(cli->s, "Registration failed: Username may already exist or server error\n");
+		return 1;
+	}
+	dprintf(cli->s, "Successfully registered user '%s'\n", username);
+	return 0;
+}
+
+int32 login_handle(Client *cli, char *username, char *args) {
+	if (cli->logged_in) {
+		dprintf(cli->s, "Error: Already logged in as %s\n", cli->username);
+		return 1;
+	}
+	if (strlen(username) < 1 || strlen(username) >= MAX_USERNAME_LEN) {
+		dprintf(cli->s, "Invalid username, must be 1-%d characters\n", MAX_USERNAME_LEN - 1);
+		return 1;
+	}
+	if (strlen(args) < 1) {
+		dprintf(cli->s, "Missing password\n");
+		return 1;
+	}
+	if (verify_user(username, args)) {
+		cli->logged_in = 1;
+		strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
+		dprintf(cli->s, "Successfully logged in as '%s'\n", username);
+		return 0;
+	} else {
+		dprintf(cli->s, "Login failed: Invalid username or password\n");
+		return 1;
+	}
+}
+
 
 int32 tree_handle(Client *cli, char *folder, char *args) {
 	print_tree(cli->s, root);
@@ -406,6 +457,8 @@ Client *build_client_struct() {
 		fprintf(stderr, "build_client_struct() malloc failure\n");
 		return NULL;
 	}
+	client->logged_in = 0;
+	client->username[0] = '\0';
 	return client;
 }
 
@@ -486,6 +539,10 @@ int init_root() {
 	mem_control->shared_mem_pool = NULL;
 	mem_control->shared_mem_size = 0;
 	mem_control->shared_mem_used = 0;
+	mem_control->user_count = 0;
+	zero((void *)mem_control->users, sizeof(mem_control->users));
+	
+	
 	hash_table_init();
 	root = create_root_node();
 	if (!root) {

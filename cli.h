@@ -14,6 +14,7 @@
 #define PORT				"8000"
 #define HOST				"127.0.0.1"
 #define MAX_FILE_UPLOAD			1048576 //1MB
+#define MAX_USERNAME_LEN		32
 typedef unsigned int int32;
 typedef unsigned short int int16;
 typedef unsigned char int8;
@@ -27,6 +28,8 @@ struct s_client {
 	int s;
 	char ip[16];
 	int16 port;
+	int logged_in;
+	char username[MAX_USERNAME_LEN];
 };
 
 struct s_command_handler {
@@ -34,6 +37,8 @@ struct s_command_handler {
 	Callback callback_function;
 };
 int32 help_handle(Client *, char *, char *);
+int32 register_handle(Client *, char *, char *);
+int32 login_handle(Client *, char *, char *);
 int32 tree_handle(Client *, char *, char *);
 int32 newdir_handle(Client *, char *, char *);
 int32 back_handle(Client *, char *, char *);

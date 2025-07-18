@@ -434,6 +434,61 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	return new;
 }
 
+User *create_new_user(const char *username, const char *password) {
+	if (strlen(username) >= MAX_USERNAME_LEN || strlen(username) < 1) {
+		fprintf(stderr, "create_new_user: Invalid username length\n");
+		return NULL;
+	}
+	if (mem_control->user_count >= MAX_USERS) {
+		fprintf(stderr, "create_new_user: User limit reached\n");
+		return NULL;
+	}
+	for (size_t i = 0; i < mem_control->user_count; i++) {
+		if (strcmp(mem_control->users[i]->username, username) == 0) {
+			fprintf(stderr, "create_new_user: Username already exists\n");
+			return NULL;
+		}
+	}
+
+	User *user = alloc_shared(sizeof(User));
+	if (!user) {
+		fprintf(stderr, "create_new_user: Malloc failed\n");
+		return NULL;
+	}
+	zero(user, sizeof(User));
+	strncpy(user->username, username, MAX_USERNAME_LEN - 1);
+	SHA256((const unsigned char *)password, strlen(password), user->password_hash);
+	mem_control->users[mem_control->user_count++] = user;
+	fprintf(stderr, "create_new_user: Created User %s\n", username);
+	return user;
+}
+
+User *find_user(const char *username) {
+	for (size_t i = 0; i < mem_control->user_count; i++) {
+		if (strcmp(mem_control->users[i]->username, username) == 0) {
+			return mem_control->users[i];
+		}
+	}
+	fprintf(stderr, "User not found\n");
+	return NULL;
+}
+
+int verify_user(const char *username, const char *password) {
+	User *user = find_user(username);
+	if (!user) {
+		fprintf(stderr, "verify_user: User %s not found\n", username);
+		return 0;
+	}
+	unsigned char hash[SHA256_DIGEST_LENGTH];
+	SHA256((const unsigned char *)password, strlen(password), hash);
+	if (memcmp(hash, user->password_hash, SHA256_DIGEST_LENGTH) == 0) {
+		fprintf(stderr, "User %s found and verified\n", username);
+		return 1;
+	}
+	fprintf(stderr, "Verify_user: Password mismatch\n");
+	return 0;
+}
+
 void print_node(Node *n) {
 	if (!n) {
 		printf("Invalid directory\n");
