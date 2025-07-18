@@ -417,12 +417,19 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	if (!new) {
 		return NULL;
 	}
-	
 	new->type = VALUE_BINARY;
-	new->value.binary.data = alloc_shared(size);
-	CHECK_NULL(new->value.binary.data, "create_leaf_binary() malloc failure\n");
-	memcpy(new->value.binary.data, data, size);
-	new->value.binary.size = size;
+	uLongf compressed_size = compressBound(size);
+	void *compressed_data = alloc_shared(compressed_size);
+	CHECK_NULL(compressed_data, "create_leaf_binary() alloc_shared failure\n");
+	if (compress(compressed_data, &compressed_size, data, size) != Z_OK) {
+		fprintf(stderr, "create_leaf_binary() compression failed\n");
+		return NULL;
+	}
+	fprintf(stderr, "create_leaf_binary: key=%s, original size=%zu bytes, compressed size=%zu bytes\n", key, size, compressed_size);
+
+	new->value.binary.data = compressed_data;
+	new->value.binary.size = compressed_size;
+	new->value.binary.compressed = 1;
 	add_leaf_to_table(new);
 	return new;
 }
@@ -462,18 +469,41 @@ void print_leaf(int cli_fd, Leaf *l) {
 			snprintf(body, sizeof(body), "%.2f\n", l->value.floating);
 			break;
 		case VALUE_BINARY:
-			if (l->value.binary.size > (sizeof(body) - 1) / 4 * 3) {
-				snprintf(body, sizeof(body), "Binary data too large to display (%ld bytes)\n", l->value.binary.size);
-			} else {
-				size_t encoded_len;
-				char *encoded = base64_encode(l->value.binary.data, l->value.binary.size, &encoded_len);
-				if (!encoded) {
-					snprintf(body, sizeof(body), "Base64 encoding failed\n");
+			if (l->value.binary.compressed) {
+				// Decompress for display
+				uLongf uncompressed_size = MAX_BASE64_LEN * 3 / 4;
+				unsigned char *uncompressed_data = malloc(uncompressed_size);
+				if (!uncompressed_data) {
+					snprintf(body, sizeof(body), "Memory allocation failed for decompression\n");
+				} else if (uncompress(uncompressed_data, &uncompressed_size, l->value.binary.data, l->value.binary.size) != Z_OK) {
+					snprintf(body, sizeof(body), "Decompression failed\n");
+					free(uncompressed_data);	
 				} else {
-					snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n", l->value.binary.size, encoded);
-					free(encoded);
+					size_t encoded_len;
+					char *encoded = base64_encode(uncompressed_data, uncompressed_size, &encoded_len);
+					if (!encoded) {
+						snprintf(body, sizeof(body), "Base64 encoding failed\n");
+					} else {
+						snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n", uncompressed_size, encoded);
+						free(encoded);
+					}
+					free(uncompressed_data);
+				}
+			} else {	
+				if (l->value.binary.size > (sizeof(body) - 1) / 4 * 3) {
+					snprintf(body, sizeof(body), "Binary data too large to display (%ld bytes)\n", l->value.binary.size);
+				} else {
+					size_t encoded_len;
+					char *encoded = base64_encode(l->value.binary.data, l->value.binary.size, &encoded_len);
+					if (!encoded) {
+						snprintf(body, sizeof(body), "Base64 encoding failed\n");
+					} else {
+						snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n", l->value.binary.size, encoded);
+						free(encoded);
+					}
 				}
 			}
+
 			break;
 		default:
 			snprintf(body, sizeof(body), "Unknown file type\n");

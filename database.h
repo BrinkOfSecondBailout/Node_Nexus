@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <zlib.h>
+
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -79,6 +81,7 @@ typedef union {
 	struct {
 		void *data;
 		size_t size;
+		int compressed;
 	} binary;
 } LeafValue;
 
@@ -103,7 +106,7 @@ struct s_hash_entry {
 	char key[MAX_KEY_LEN];
 	Leaf *leaf;
 	struct s_hash_entry *next;
-}
+};
 
 typedef struct SharedMemControl {
 	void *shared_mem_pool;

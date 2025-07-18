@@ -1,6 +1,6 @@
 C = gcc
 CFLAGS = -Wall -g -O2
-LDFLAGS = 
+LDFLAGS = -lz
 SOURCES = cli.c myserver.c database.c base64.c
 OBJECTS = $(SOURCES:.c=.o)
 	EXECUTABLE = cli

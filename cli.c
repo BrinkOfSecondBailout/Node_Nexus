@@ -181,7 +181,6 @@ int32 open_handle(Client *cli, char *key, char *args) {
 		return 1;
 	}
 	leaf = find_leaf_by_hash(key);
-	//printf("Leaf: %p\n", leaf);	
 	if (!leaf) {
 		dprintf(cli->s, "Unable to find file by name '%s'\n", key);
 		return 1;
@@ -197,14 +196,31 @@ int32 save_handle(Client *cli, char *key, char *args) {
 		return 1;
 	}
 	leaf = find_leaf_by_hash(key);
-	// printf("Leaf: %p\n", leaf);	
 	if (!leaf || leaf->type != VALUE_BINARY) {
 		dprintf(cli->s, "File '%s' not found or not binary\n", key);
 		return 1;
 	}
 	
 	size_t encoded_len;
-	char *encoded = base64_encode(leaf->value.binary.data, leaf->value.binary.size, &encoded_len);
+	char *encoded;
+	if (leaf->value.binary.compressed) {
+		uLongf uncompressed_size = MAX_FILE_UPLOAD;
+		unsigned char *uncompressed_data = malloc(uncompressed_size);
+		if (!uncompressed_data) {
+			dprintf(cli->s, "Memory allocation failed for decompression\n");
+			return 1;
+		}
+		if (uncompress(uncompressed_data, &uncompressed_size, leaf->value.binary.data, leaf->value.binary.size) != Z_OK) {
+			dprintf(cli->s, "Decompression failed\n");
+			free(uncompressed_data);
+			return 1;
+		}
+		encoded = base64_encode(uncompressed_data, uncompressed_size, &encoded_len);
+		free(uncompressed_data);
+
+	} else {
+		encoded = base64_encode(leaf->value.binary.data, leaf->value.binary.size, &encoded_len);
+	}
 	if (!encoded) {
 		dprintf(cli->s, "Base64 encoding failed\n");
 		return 1;
