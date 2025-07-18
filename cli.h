@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/sem.h>
 #include <sys/mman.h>
+#include <poll.h>
+
 
 #define MAX_CONNECTION			50
 #define PORT				"8000"

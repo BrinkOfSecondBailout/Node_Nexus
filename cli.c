@@ -446,7 +446,12 @@ int start_cli_app(int serv_fd) {
 
 		if (!fork()) {
 			close(serv_fd);
-			dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
+			struct pollfd pfd = { .fd = client->s, .events = POLLIN };
+			int ret = poll(&pfd, 1, 0);
+			printf("%d\n", ret);
+			if (ret <= 0 || !(pfd.revents & POLLIN)) {
+				dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
+			}
 			child_loop(client);
 			exit(0);
 		}

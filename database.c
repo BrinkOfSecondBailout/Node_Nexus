@@ -135,18 +135,24 @@ Leaf *find_leaf_linear(Node *root, char *key) {
 	return NULL;
 }
 
+Node *find_node_and_siblings(Node *node, char *path) {
+	while (node) {
+		if (strstr(node->path, path)) {
+			return node;
+		}
+		node = node->sibling;
+	}
+	return NULL;
+}
+
 Node *find_node_linear(Node *root, char *path) {
-	Node *n;
-	for (n = root; n; n = n->child) {
-		if (strstr(n->path, path)) {
-			return n;
+	Node *node, *temp;
+	for (node = root; node; node = node->child) {
+		if (strstr(node->path, path)) {
+			return node;
 		}
-		while (n->sibling) {
-			n = n->sibling;
-			if (strstr(n->path, path)) {
-				return n;
-			}
-		}
+		temp = find_node_and_siblings(node, path);
+		if (temp) return temp;
 	}
 	return NULL;
 }
