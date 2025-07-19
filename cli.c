@@ -13,6 +13,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
 	{ (char *)"register", register_handle },
 	{ (char *)"login", login_handle },
+	{ (char *)"logout", logout_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
 	{ (char *)"back", back_handle },
@@ -32,6 +33,7 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	char *instructions = "-- 'help' - list all available command apis\n"
 	"-- 'register <username> <password> - create a new account\n"
 	"-- 'login <username> <password> - log in to an existing account\n"
+	"-- 'logout' - log out of current account\n"
 	"-- 'tree' - show all current folders and files\n"
 	"-- 'newdir <name>' - add new directory in current folder\n"
 	"-- 'back' - jump back one directory\n"
@@ -68,7 +70,10 @@ int32 register_handle(Client *cli, char *username, char *args) {
 		dprintf(cli->s, "Registration failed: Username may already exist or server error\n");
 		return 1;
 	}
-	dprintf(cli->s, "Successfully registered user '%s'\n", username);
+	cli->logged_in = 1;
+	user->logged_in = 1;
+	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
+	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
 
@@ -85,17 +90,43 @@ int32 login_handle(Client *cli, char *username, char *args) {
 		dprintf(cli->s, "Missing password\n");
 		return 1;
 	}
-	if (verify_user(username, args)) {
+	int n = verify_user(username, args);
+	
+	if (n == 0) {
 		cli->logged_in = 1;
+		mark_user_logged_in(username);
 		strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 		dprintf(cli->s, "Successfully logged in as '%s'\n", username);
 		return 0;
+	} else if (n == 1) {
+		dprintf(cli->s, "Login failed: Username '%s' not found\n", username);
+		return 1;
+	} else if (n == 2) {
+		dprintf(cli->s, "Login failed: Incorrect password\n");
+		return 1;
+	} else if (n == 3) {
+		dprintf(cli->s, "Login failed: User '%s' already logged in elsewhere\n", username);
+		return 1;
+	}
+	return 1;
+}
+
+int32 logout_handle(Client *cli, char *username, char *args) {
+	if (cli->logged_in == 1) {
+		if (!mark_user_logged_out((const char *)cli->username)) {
+			cli->username[0] = '\0';
+			cli->logged_in = 0;
+			dprintf(cli->s, "Successfully logged out\n");
+			return 0;
+		} else {
+			dprintf(cli->s, "Server error, please try again later\n");
+			return 1;
+		}
 	} else {
-		dprintf(cli->s, "Login failed: Invalid username or password\n");
+		dprintf(cli->s, "Error: Current client isn't logged in\n");
 		return 1;
 	}
 }
-
 
 int32 tree_handle(Client *cli, char *folder, char *args) {
 	print_tree(cli->s, root);

@@ -473,20 +473,44 @@ User *find_user(const char *username) {
 	return NULL;
 }
 
+int mark_user_logged_in(const char *username) {
+	User *user = find_user(username);
+	if (!user) {
+		fprintf(stderr, "Invalid user\n");
+		return 1;
+	}
+	user->logged_in = 1;
+	return 0;
+}
+
+int mark_user_logged_out(const char *username) {
+	User *user = find_user(username);
+	if (!user) {
+		fprintf(stderr, "Invalid user\n");
+		return 1;
+	}
+	user->logged_in = 0;
+	return 0;
+}
+
 int verify_user(const char *username, const char *password) {
 	User *user = find_user(username);
 	if (!user) {
 		fprintf(stderr, "verify_user: User %s not found\n", username);
-		return 0;
+		return 1;
 	}
 	unsigned char hash[SHA256_DIGEST_LENGTH];
 	SHA256((const unsigned char *)password, strlen(password), hash);
 	if (memcmp(hash, user->password_hash, SHA256_DIGEST_LENGTH) == 0) {
+		if (user->logged_in) {
+			fprintf(stderr, "User %s already logged in\n", username);
+			return 3;
+		}
 		fprintf(stderr, "User %s found and verified\n", username);
-		return 1;
+		return 0;
 	}
 	fprintf(stderr, "Verify_user: Password mismatch\n");
-	return 0;
+	return 2;
 }
 
 void print_node(Node *n) {
