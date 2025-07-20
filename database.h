@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <zlib.h>
 #include <openssl/sha.h>
+#include <pthread.h>
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -123,6 +124,7 @@ typedef struct SharedMemControl {
 	HashEntry *hash_table[HASH_TABLE_SIZE];
 	User *users[MAX_USERS];
 	size_t user_count;
+	pthread_mutex_t mutex;
 } SharedMemControl;
 
 extern SharedMemControl *mem_control;

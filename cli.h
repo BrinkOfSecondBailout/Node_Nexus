@@ -8,7 +8,8 @@
 #include <sys/sem.h>
 #include <sys/mman.h>
 #include <poll.h>
-
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define MAX_CONNECTION			10
 #define PORT				"8000"

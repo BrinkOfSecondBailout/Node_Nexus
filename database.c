@@ -292,6 +292,7 @@ Node *create_root_node() {
 }
 
 Node *create_new_node(Node *parent, char *path) {
+	pthread_mutex_lock(&mem_control->mutex);
 	Node *new, *last;
 	size_t size;
 	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
@@ -304,6 +305,7 @@ Node *create_new_node(Node *parent, char *path) {
 	size_t new_len = strlen(path);	
 	if (parent_len + new_len + 2 >= MAX_PATH_LEN) {
 		fprintf(stderr, "Path too long in new node\n");
+		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
 
@@ -322,6 +324,7 @@ Node *create_new_node(Node *parent, char *path) {
 	CONCAT_PATH(temp_path, parent->path, path, MAX_PATH_LEN); 
 	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
 	
+	pthread_mutex_unlock(&mem_control->mutex);
 	return new;
 }
 
@@ -435,17 +438,21 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 }
 
 User *create_new_user(const char *username, const char *password) {
+	pthread_mutex_lock(&mem_control->mutex);
 	if (strlen(username) >= MAX_USERNAME_LEN || strlen(username) < 1) {
 		fprintf(stderr, "create_new_user: Invalid username length\n");
+		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
 	if (mem_control->user_count >= MAX_USERS) {
 		fprintf(stderr, "create_new_user: User limit reached\n");
+		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
 	for (size_t i = 0; i < mem_control->user_count; i++) {
 		if (strcmp(mem_control->users[i]->username, username) == 0) {
 			fprintf(stderr, "create_new_user: Username already exists\n");
+			pthread_mutex_unlock(&mem_control->mutex);
 			return NULL;
 		}
 	}
@@ -453,6 +460,7 @@ User *create_new_user(const char *username, const char *password) {
 	User *user = alloc_shared(sizeof(User));
 	if (!user) {
 		fprintf(stderr, "create_new_user: Malloc failed\n");
+		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
 	zero(user, sizeof(User));
@@ -460,6 +468,7 @@ User *create_new_user(const char *username, const char *password) {
 	SHA256((const unsigned char *)password, strlen(password), user->password_hash);
 	mem_control->users[mem_control->user_count++] = user;
 	fprintf(stderr, "create_new_user: Created User %s\n", username);
+	pthread_mutex_unlock(&mem_control->mutex);
 	return user;
 }
 
@@ -512,6 +521,8 @@ int verify_user(const char *username, const char *password) {
 	fprintf(stderr, "Verify_user: Password mismatch\n");
 	return 2;
 }
+
+
 
 void print_node(Node *n) {
 	if (!n) {
@@ -595,6 +606,7 @@ void print_leaf(int cli_fd, Leaf *l) {
 }
 
 int delete_node(Node *node) {
+	pthread_mutex_lock(&mem_control->mutex);
 	Node *parent, *first;
 	Node *prev = NULL;
        	parent = node->parent;
@@ -615,22 +627,26 @@ int delete_node(Node *node) {
 				}
 			}
 			free_node(first);
+			pthread_mutex_unlock(&mem_control->mutex);
 			return 0;
 		}
 		prev = first;
 		first = first->sibling;
 	}
 	fprintf(stderr, "delete_node() failure, unable to unlink node\n");	
+	pthread_mutex_unlock(&mem_control->mutex);
 	return 1;
 }
 
 int delete_leaf(char *name) {
+	pthread_mutex_lock(&mem_control->mutex);
 	Leaf *leaf, *first;
 	Leaf *prev = NULL;
 	Node *parent;
 	leaf = find_leaf_by_hash(name);
 	if (!leaf) {
 		fprintf(stderr, "delete_leaf() failure, no such file\n");
+		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
 	parent = leaf->parent;
@@ -651,6 +667,7 @@ int delete_leaf(char *name) {
 				}
 			}
 			free_leaf(first);
+			pthread_mutex_unlock(&mem_control->mutex);
 			return 0;
 		} else {
 			prev = first;
@@ -658,16 +675,19 @@ int delete_leaf(char *name) {
 		}
 	}
 	fprintf(stderr, "delete_leaf() failure, unable to unlink leaf\n");	
+	pthread_mutex_unlock(&mem_control->mutex);
 	return 1;
 }
 
 void reset_database() {
+	pthread_mutex_lock(&mem_control->mutex);
 	if (root) {
 		free_node(root);
 		root = NULL;
 	}
 	hash_table_init();
 	mem_control->shared_mem_used = 0;
+	pthread_mutex_unlock(&mem_control->mutex);
 }
 
 void free_leaf(Leaf *leaf) {
@@ -741,6 +761,7 @@ void cleanup_database(void) {
 		mem_control->shared_mem_size = 0;
 	}
 	if (mem_control) {
+		pthread_mutex_destroy(&mem_control->mutex);
 		munmap(mem_control, sizeof(SharedMemControl));
 		mem_control = NULL;
 	}

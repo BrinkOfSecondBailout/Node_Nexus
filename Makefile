@@ -1,6 +1,6 @@
 C = gcc
 CFLAGS = -Wall -g -O2
-LDFLAGS = -lz -lcrypto
+LDFLAGS = -lz -lcrypto -pthread
 SOURCES = cli.c database.c myserver.c base64.c
 OBJECTS = $(SOURCES:.c=.o)
 	EXECUTABLE = cli

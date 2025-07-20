@@ -134,6 +134,10 @@ int32 tree_handle(Client *cli, char *folder, char *args) {
 }
 
 int32 newdir_handle(Client *cli, char *folder, char *args) {
+	if (!cli->logged_in) {
+		dprintf(cli->s, "Please register or log in first to modify database\n");
+		return 1;
+	}
 	if ((strlen(folder) < 1)) {
 		dprintf(cli->s, "Please enter a name for new directory\n");
 		return 1;
@@ -186,6 +190,10 @@ int32 jump_handle(Client *cli, char *folder, char *args) {
 
 
 int32 addfile_handle(Client *cli, char *folder, char *args) {
+	if (!cli->logged_in) {
+		dprintf(cli->s, "Please register or log in first to modify database\n");
+		return 1;
+	}
 	if ((strlen(folder) == 0)) {
 		dprintf(cli->s, "Missing folder name, use 'curr' for current directory\n");
 		return 1;
@@ -215,6 +223,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	strncpy(flag, p, sizeof(flag) - 1);
 	p = strtok(NULL, " ");
 	strncpy(value, p, MAX_FILE_UPLOAD - 1);
+	pthread_mutex_lock(&mem_control->mutex);
 	if (!strcmp(flag, "-s")) {
 		leaf = create_new_leaf_string(node, name, value, sizeof(value));		
 	} else if (!strcmp(flag, "-i")) {
@@ -224,6 +233,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		unsigned char *decoded = base64_decode(value, strlen(value), &decoded_len);
 		if (!decoded) {
 			dprintf(cli->s, "Base64 decoding failed\n");
+			pthread_mutex_unlock(&mem_control->mutex);
 			return 1;
 		}
 		leaf = create_new_leaf_binary(node, name, decoded, decoded_len);
@@ -232,6 +242,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		FILE *f = fopen(value, "rb");
 		if (!f) {
 			dprintf(cli->s, "Cannot open file from designated path %s\n", value);
+			pthread_mutex_unlock(&mem_control->mutex);
 			return 1;
 		}
 		fseek(f, 0, SEEK_END);
@@ -245,13 +256,16 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		free(data);
 	} else {
 		dprintf(cli->s, "Invalid flag, please use -s , -i , -b for string/integer/binary\n");
+		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
 	if (!leaf) {
 		dprintf(cli->s, "Unable to add file %s.. make sure new file name is unique.. please try again..\n", name);
+		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
+	pthread_mutex_unlock(&mem_control->mutex);
 	free(value);
 	return 0;	
 }
@@ -315,6 +329,10 @@ int32 save_handle(Client *cli, char *key, char *args) {
 }
 
 int32 kill_handle(Client *cli, char *flag, char *name) {
+	if (!cli->logged_in) {
+		dprintf(cli->s, "Please register or log in first to modify database\n");
+		return 1;
+	}
 	if (strcmp(flag, "-d") && strcmp(flag, "-f")) {
 		dprintf(cli->s, "Invalid flag, use -d for directory or -f for file\n");
 		return 1;
@@ -371,6 +389,10 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 }
 
 int32 nuke_handle(Client *cli, char *folder, char *args) {
+	if (!cli->logged_in) {
+		dprintf(cli->s, "Please register or log in first to modify database\n");
+		return 1;
+	}
 	char buffer[256] = {0};
 	dprintf(cli->s, "This will delete all files and folders, proceed?\n~ Y/N ~\n");
 	ssize_t n = read(cli->s, buffer, sizeof(buffer) - 1);
@@ -408,6 +430,7 @@ int32 nuke_handle(Client *cli, char *folder, char *args) {
 }
 
 int32 exit_handle(Client *cli, char *folder, char *args) {
+	dprintf(cli->s, "Bye now!\n");
 	keep_running_child = 0;
 	return 0;	
 }
@@ -573,7 +596,16 @@ int init_root() {
 	mem_control->user_count = 0;
 	zero((void *)mem_control->users, sizeof(mem_control->users));
 	
-	
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	if (pthread_mutex_init(&mem_control->mutex, &attr) != 0) {
+		fprintf(stderr, "Mutex initialization failed: %s\n", strerror(errno));
+		munmap(mem_control, sizeof(SharedMemControl));
+		return 1;
+	}
+	pthread_mutexattr_destroy(&attr);
+
 	hash_table_init();
 	root = create_root_node();
 	if (!root) {
