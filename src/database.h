@@ -130,6 +130,7 @@ typedef struct SharedMemControl {
 extern SharedMemControl *mem_control;
 extern Node *root;
 
+void *alloc_shared(size_t size);
 void zero(void *, size_t);
 // char *indent(int8);
 // void print_original_node(Node *, int8, int);
