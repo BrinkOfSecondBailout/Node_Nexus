@@ -30,6 +30,11 @@ void zero(void *buf, size_t size) {
 	memset(buf, 0, size);
 }
 
+void node_hash_table_init() {
+	zero((void*)mem_control->node_hash_table, (size_t)sizeof(mem_control->node_hash_table));
+	mem_control->node_count = 0;
+}
+
 void leaf_hash_table_init() {
 	zero((void *)mem_control->leaf_hash_table, (size_t)sizeof(mem_control->leaf_hash_table));
 	mem_control->leaf_count = 0;
@@ -97,7 +102,7 @@ static Leaf *find_last_leaf_linear(Node *parent) {
 }
 
 Leaf *find_leaf_by_hash(char *key) {
-	printf("Searching for %s\n", key);
+	printf("Searching for leaf: %s\n", key);
 	uint32_t index = HASH_KEY(key, LEAF_HASH_TABLE_SIZE);
 	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
 	printf("Entry %p\n", entry);
@@ -141,6 +146,19 @@ Node *find_node_and_siblings(Node *node, char *path) {
 			return node;
 		}
 		node = node->sibling;
+	}
+	return NULL;
+}
+
+Node *find_node_by_hash(char *key) {
+	uint32_t index = HASH_KEY(key, NODE_HASH_TABLE_SIZE);
+	NodeHashEntry *entry = mem_control->node_hash_table[index];
+	while (entry) {
+		printf("Searching for node: %s\n", key);
+		if (!strcmp(entry->key, key)) {
+			return entry->node;
+		}
+		entry = entry->next;
 	}
 	return NULL;
 }
@@ -279,6 +297,24 @@ void print_tree(int fd, Node *root) {
 	
 }
 
+static void add_node_to_table(Node *node) {
+	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
+	NodeHashEntry *entry = alloc_shared(sizeof(NodeHashEntry));
+	if (!entry) {
+		fprintf(stderr, "add_node_to_table() malloc failure\n");
+		return;
+	}
+	zero((void*)entry, (size_t)sizeof(NodeHashEntry));
+	strncpy(entry->key, node->key, MAX_KEY_LEN);
+	entry->node = node;
+	entry->next = mem_control->node_hash_table[index];
+	mem_control->node_hash_table[index] = entry;
+	mem_control->node_count++;
+	printf("New node: %s\n", node->key);
+	printf("Node count: %ld\n", mem_control->node_count);
+	return;
+}
+
 Node *create_root_node() {
 	Node *root = alloc_shared(sizeof(Node));
 	CHECK_NULL(root, "Failed to allocate root");
@@ -287,12 +323,14 @@ Node *create_root_node() {
 	root->sibling = NULL;
 	root->child = NULL;
 	root->leaf = NULL;
+	strncpy(root->key, "root", MAX_KEY_LEN - 1);
 	strncpy(root->path, "/", MAX_PATH_LEN - 1);
 	root->path[MAX_PATH_LEN - 1] = '\0';
+	add_node_to_table(root);
 	return root;
 }
 
-Node *create_new_node(Node *parent, char *path) {
+Node *create_new_node(Node *parent, char *name) {
 	pthread_mutex_lock(&mem_control->mutex);
 	Node *new, *last;
 	size_t size;
@@ -303,7 +341,7 @@ Node *create_new_node(Node *parent, char *path) {
 	zero((void *)new, size);
 	char temp_path[MAX_PATH_LEN];
 	size_t parent_len = strlen(parent->path);
-	size_t new_len = strlen(path);	
+	size_t new_len = strlen(name);	
 	if (parent_len + new_len + 2 >= MAX_PATH_LEN) {
 		fprintf(stderr, "Path too long in new node\n");
 		pthread_mutex_unlock(&mem_control->mutex);
@@ -321,10 +359,12 @@ Node *create_new_node(Node *parent, char *path) {
 	new->sibling = NULL;
 	new->child = NULL;
 	new->leaf = NULL;
-
-	CONCAT_PATH(temp_path, parent->path, path, MAX_PATH_LEN); 
-	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
 	
+	CONCAT_PATH(temp_path, parent->path, name, MAX_PATH_LEN); 
+	strncpy(new->key, name, MAX_KEY_LEN - 1);
+	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
+	printf("New node path: %s\n", new->path);	
+	add_node_to_table(new);
 	pthread_mutex_unlock(&mem_control->mutex);
 	return new;
 }
@@ -688,6 +728,7 @@ void reset_database() {
 		free_node(root);
 		root = NULL;
 	}
+	node_hash_table_init();
 	leaf_hash_table_init();
 	mem_control->shared_mem_used = 0;
 	pthread_mutex_unlock(&mem_control->mutex);
@@ -712,23 +753,26 @@ void free_leaf(Leaf *leaf) {
 		prev = entry;
 		entry = entry->next;
 	}
-	/*
-	switch(leaf->type) {
-		case VALUE_STRING:
-			free(leaf->value.string);
-			break;
-		case VALUE_BINARY:
-			free(leaf->value.binary.data);
-			break;
-		default:
-			break;
-	}
-	free(leaf);
-	*/
 }
 
 void free_node(Node *node) {
 	if (!node) return;
+	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
+	NodeHashEntry *entry = mem_control->node_hash_table[index];
+	NodeHashEntry *prev = NULL;
+	while (entry) {
+		if (entry->node == node) {
+			if (prev) {
+				prev->next = entry->next;
+			} else {
+				mem_control->node_hash_table[index] = entry->next;
+			}
+			mem_control->node_count--;
+			break;
+		}
+		prev = entry;
+		entry = entry->next;
+	}
 	Leaf *leaf = node->leaf;
 	while (leaf) {
 		Leaf *next = leaf->sibling;
@@ -738,15 +782,30 @@ void free_node(Node *node) {
 	if (node->child) {
 		free_node(node->child);
 	}
-	// free(node);
+}
+/*
+void node_hash_table_free() {
+	if (!mem_control) {
+		fprintf(stderr, "node_hash_table_free: mem_control is NULL\n");
+		return;
+	}
+	for (int i = 0; i < mem_control->node_count; i++) {
+		NodeHashEntry *entry = mem_control->node_hash_table[i];
+		while (entry) {
+			NodeHashEntry *next = entry->next;
+			entry = next;
+		}
+		mem_control->node_hash_table[i] = NULL;
+	}
+	mem_control->node_count = 0;
 }
 
 void leaf_hash_table_free() {
 	if (!mem_control) {
-		fprintf(stderr, "hash_table_free: mem_control is NULL\n");
+		fprintf(stderr, "leaf_hash_table_free: mem_control is NULL\n");
 		return;
 	}
-	for (int i = 0; i < LEAF_HASH_TABLE_SIZE; i++) {
+	for (int i = 0; i < mem_control->leaf_count; i++) {
 		LeafHashEntry *entry = mem_control->leaf_hash_table[i];
 		while (entry) {
 			LeafHashEntry *next = entry->next;
@@ -757,13 +816,12 @@ void leaf_hash_table_free() {
 	}
 	mem_control->leaf_count = 0;
 }
-
+*/
 void write_node(FILE *f, Node *node, int count) {
 	if (!node) return;
 	if (fwrite(node, sizeof(Node), count, f) != count) {
 		fprintf(stderr, "save_node() fwrite error\n");	
 	}
-	free_node(node);
 	return;
 }
 

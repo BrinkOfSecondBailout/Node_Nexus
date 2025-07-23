@@ -179,13 +179,13 @@ int32 jump_handle(Client *cli, char *folder, char *args) {
 		dprintf(cli->s, "Missing folder name\n");
 		return 1;	
 	}
-	Node *node = find_node_linear(root, folder);
+	Node *node = find_node_by_hash(folder);
 	if (!node) {
 		dprintf(cli->s, "No folder by that name exists\n");
 		return 1;
 	}
 	curr_node = node;
-	dprintf(cli->s, "Found and currently in folder '%s'\n", curr_node->path);
+	dprintf(cli->s, "Found and currently in folder '%s'\n", node->path);
 	return 0;
 }
 
@@ -207,7 +207,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	if (!strcmp(folder, "curr")) {
 		node = curr_node;
 	} else {
-		node = find_node_linear(root, folder);
+		node = find_node_by_hash(folder);
 		if (!node) {
 			dprintf(cli->s, "Invalid folder name\n");
 			return 1;
@@ -343,7 +343,7 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 		return 1;
 	}
 	if (!strcmp(flag, "-d")) {
-		Node *node = find_node_linear(root, name);
+		Node *node = find_node_by_hash(name);
 		if (!node) {
 			dprintf(cli->s, "Invalid directory, '%s' not found\n", name);
 			return 1;
@@ -367,6 +367,7 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 				dprintf(cli->s, "Unable to delete directory '%s'\n", name);
 				return 1;
 			}
+			curr_node = root;
 			dprintf(cli->s, "Directory '%s' deleted\n", name);
 			return 0;
 		} else if (!strcmp(buffer, "N") || !strcmp(buffer, "n") || !strcmp(buffer, "No") || !strcmp(buffer, "no")) {
@@ -622,7 +623,7 @@ int init_root() {
 		return 1;
 	}
 	pthread_mutexattr_destroy(&attr);
-
+	node_hash_table_init();
 	leaf_hash_table_init();
 	root = create_root_node();
 	if (!root) {

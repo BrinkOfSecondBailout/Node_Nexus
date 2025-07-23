@@ -22,6 +22,7 @@
 
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
+#define NODE_HASH_TABLE_SIZE 1024
 #define LEAF_HASH_TABLE_SIZE 1024
 #define MAX_BASE64_LEN 1048576 //1MB
 #define SHARED_MEM_INITIAL_SIZE 1024 * 1024 //1MB
@@ -30,8 +31,6 @@
 
 #define find_last_leaf(x)		find_last_leaf_linear(x)
 #define find_last_child_node(x)		find_last_child_node_linear(x)
-#define find_leaf(x)			find_leaf_hash(x)
-#define find_node(x, y)			find_node_linear(x, y)
 
 #define CONCAT_PATH(dest, parent_path, child_path, max_len)			\
 	do {									\
@@ -63,6 +62,7 @@
 
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
+typedef struct s_node_hash_entry NodeHashEntry;
 typedef struct s_leaf_hash_entry LeafHashEntry;
 typedef struct s_user User;
 
@@ -94,6 +94,7 @@ struct s_node {
 	struct s_node *child;
 	struct s_node *sibling;
 	Leaf *leaf;
+	char key[MAX_KEY_LEN];
 	char path[MAX_PATH_LEN];
 };
 
@@ -103,6 +104,12 @@ struct s_leaf {
 	char key[MAX_KEY_LEN];
 	LeafValue value;
 	ValueType type;
+};
+
+struct s_node_hash_entry {
+	char key[MAX_KEY_LEN];
+	Node *node;
+	struct s_node_hash_entry *next;
 };
 
 struct s_leaf_hash_entry {
@@ -121,6 +128,8 @@ typedef struct SharedMemControl {
 	void *shared_mem_pool;
 	size_t shared_mem_size;
 	size_t shared_mem_used;
+	NodeHashEntry *node_hash_table[NODE_HASH_TABLE_SIZE];
+	size_t node_count;
 	LeafHashEntry *leaf_hash_table[LEAF_HASH_TABLE_SIZE];
 	size_t leaf_count;
 	User *users[MAX_USERS];
@@ -145,6 +154,7 @@ Node *create_new_node(Node *, char *);
 // Leaf *find_first_leaf(Node *);
 // Leaf *find_last_leaf_linear(Node *);
 // void add_leaf_to_table(Leaf *);
+Node *find_node_by_hash(char *);
 Leaf *find_leaf_by_hash(char *);
 // Leaf *create_new_leaf_prototype(Node *, char *);
 Leaf *create_new_leaf_string(Node *, char *, char *, size_t);
@@ -165,8 +175,9 @@ int delete_leaf(char *);
 void reset_database();
 void free_leaf(Leaf *);
 void free_node(Node *);
+void node_hash_table_init();
 void leaf_hash_table_init();
-void leaf_hash_table_free();
+// void leaf_hash_table_free();
 void cleanup_database(void);
 void init_saved_database();
 
