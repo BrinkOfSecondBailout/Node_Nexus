@@ -30,8 +30,9 @@ void zero(void *buf, size_t size) {
 	memset(buf, 0, size);
 }
 
-void hash_table_init() {
-	zero((void *)mem_control->hash_table, (size_t)sizeof(mem_control->hash_table));
+void leaf_hash_table_init() {
+	zero((void *)mem_control->leaf_hash_table, (size_t)sizeof(mem_control->leaf_hash_table));
+	mem_control->leaf_count = 0;
 }
 
 char *indent(int8 n) {
@@ -97,8 +98,8 @@ static Leaf *find_last_leaf_linear(Node *parent) {
 
 Leaf *find_leaf_by_hash(char *key) {
 	printf("Searching for %s\n", key);
-	uint32_t index = HASH_KEY(key, HASH_TABLE_SIZE);
-	HashEntry *entry = mem_control->hash_table[index];
+	uint32_t index = HASH_KEY(key, LEAF_HASH_TABLE_SIZE);
+	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
 	printf("Entry %p\n", entry);
 	while (entry) {
 		if (!strcmp(entry->key, key)) {
@@ -329,17 +330,19 @@ Node *create_new_node(Node *parent, char *path) {
 }
 
 static void add_leaf_to_table(Leaf *leaf) {	
-	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
-	HashEntry *entry = alloc_shared(sizeof(HashEntry));
+	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
+	LeafHashEntry *entry = alloc_shared(sizeof(LeafHashEntry));
 	if (!entry) {
 		fprintf(stderr, "add_leaf_to_table() malloc failure\n");
 		return;
 	}
-	zero((void *)entry, (size_t)sizeof(HashEntry));
+	zero((void *)entry, (size_t)sizeof(LeafHashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
-	entry->next = mem_control->hash_table[index];
-	mem_control->hash_table[index] = entry;
+	entry->next = mem_control->leaf_hash_table[index];
+	mem_control->leaf_hash_table[index] = entry;
+	mem_control->leaf_count++;
+	printf("Leaf count: %ld\n", mem_control->leaf_count);
 	return;
 }
 
@@ -685,24 +688,25 @@ void reset_database() {
 		free_node(root);
 		root = NULL;
 	}
-	hash_table_init();
+	leaf_hash_table_init();
 	mem_control->shared_mem_used = 0;
 	pthread_mutex_unlock(&mem_control->mutex);
 }
 
 void free_leaf(Leaf *leaf) {
 	if (!leaf) return;
-	uint32_t index = HASH_KEY(leaf->key, HASH_TABLE_SIZE);
-	HashEntry *entry = mem_control->hash_table[index];
-	HashEntry *prev = NULL;
+	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
+	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
+	LeafHashEntry *prev = NULL;
 	while (entry) {
 		if (entry->leaf == leaf) {
 			if (prev) {
 				prev->next = entry->next;
 			} else {
-				mem_control->hash_table[index] = entry->next;
+				mem_control->leaf_hash_table[index] = entry->next;
 			}
 			//free(entry);
+			mem_control->leaf_count--;
 			break;
 		}
 		prev = entry;
@@ -737,27 +741,29 @@ void free_node(Node *node) {
 	// free(node);
 }
 
-void hash_table_free() {
+void leaf_hash_table_free() {
 	if (!mem_control) {
 		fprintf(stderr, "hash_table_free: mem_control is NULL\n");
 		return;
 	}
-	for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-		HashEntry *entry = mem_control->hash_table[i];
+	for (int i = 0; i < LEAF_HASH_TABLE_SIZE; i++) {
+		LeafHashEntry *entry = mem_control->leaf_hash_table[i];
 		while (entry) {
-			HashEntry *next = entry->next;
+			LeafHashEntry *next = entry->next;
 			//free(entry);
 			entry = next;
 		}
-		mem_control->hash_table[i] = NULL;
+		mem_control->leaf_hash_table[i] = NULL;
 	}
+	mem_control->leaf_count = 0;
 }
 
-void save_node(FILE *f, Node *node) {
+void write_node(FILE *f, Node *node, int count) {
 	if (!node) return;
-	fwrite(node, sizeof(Node), 1, f);
-	save_node(f, node->child);
-	save_node(f, node->sibling);
+	if (fwrite(node, sizeof(Node), count, f) != count) {
+		fprintf(stderr, "save_node() fwrite error\n");	
+	}
+	free_node(node);
 	return;
 }
 
@@ -781,27 +787,27 @@ void save_database(const char *filename) {
 			return;
 		}
 	}
-	
-//	save_node(f, root);
+	if (root->child) {
+		fprintf(stderr, "Root has children, saving nodes\n");
+		write_node(f, root, 1);
+	} else {
+		fprintf(stderr, "Root has no children, no nodes saved\n"); 
+	}
 	fclose(f);
 	pthread_mutex_unlock(&mem_control->mutex);
 }
 
-Node *load_node(FILE *f) {
+Node *read_node(FILE *f, int count) {
 	Node *node = alloc_shared(sizeof(Node));
 	if (!node) {
-		fprintf(stderr, "load_node() malloc failure\n");
+		fprintf(stderr, "read_node() malloc failure\n");
 		return NULL;
 	}
-	if (fread(node, sizeof(Node), 1, f) != 1) {
-		fprintf(stderr, "load_node() fread() failure: %s\n", strerror(errno));
-		printf("%p\n", node);	
-		// free(node);
-		// return NULL;
+	if (fread(node, sizeof(Node), count, f) != count) {
+		fprintf(stderr, "read_node() fread() failure: %s\n", strerror(errno));
+		free(node);
+		return NULL;
 	}
-	// node->child = load_node(f);
-	// node->sibling = load_node(f);
-	// if (node->child) node->child->parent = node;
 	return node;
 }
 

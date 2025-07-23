@@ -623,7 +623,7 @@ int init_root() {
 	}
 	pthread_mutexattr_destroy(&attr);
 
-	hash_table_init();
+	leaf_hash_table_init();
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");

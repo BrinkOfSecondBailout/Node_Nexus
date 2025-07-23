@@ -22,7 +22,7 @@
 
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
-#define HASH_TABLE_SIZE 1024
+#define LEAF_HASH_TABLE_SIZE 1024
 #define MAX_BASE64_LEN 1048576 //1MB
 #define SHARED_MEM_INITIAL_SIZE 1024 * 1024 //1MB
 #define MAX_USERNAME_LEN 32
@@ -63,7 +63,7 @@
 
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
-typedef struct s_hash_entry HashEntry;
+typedef struct s_leaf_hash_entry LeafHashEntry;
 typedef struct s_user User;
 
 typedef unsigned int int32;
@@ -105,10 +105,10 @@ struct s_leaf {
 	ValueType type;
 };
 
-struct s_hash_entry {
+struct s_leaf_hash_entry {
 	char key[MAX_KEY_LEN];
 	Leaf *leaf;
-	struct s_hash_entry *next;
+	struct s_leaf_hash_entry *next;
 };
 
 struct s_user {
@@ -121,7 +121,8 @@ typedef struct SharedMemControl {
 	void *shared_mem_pool;
 	size_t shared_mem_size;
 	size_t shared_mem_used;
-	HashEntry *hash_table[HASH_TABLE_SIZE];
+	LeafHashEntry *leaf_hash_table[LEAF_HASH_TABLE_SIZE];
+	size_t leaf_count;
 	User *users[MAX_USERS];
 	size_t user_count;
 	pthread_mutex_t mutex;
@@ -164,8 +165,8 @@ int delete_leaf(char *);
 void reset_database();
 void free_leaf(Leaf *);
 void free_node(Node *);
-void hash_table_init();
-void hash_table_free();
+void leaf_hash_table_init();
+void leaf_hash_table_free();
 void cleanup_database(void);
 void init_saved_database();
 
