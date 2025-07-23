@@ -753,7 +753,116 @@ void hash_table_free() {
 	}
 }
 
+void save_node(FILE *f, Node *node) {
+	if (!node) return;
+	fwrite(node, sizeof(Node), 1, f);
+	save_node(f, node->child);
+	save_node(f, node->sibling);
+	return;
+}
+
+void save_database(const char *filename) {
+	pthread_mutex_lock(&mem_control->mutex);
+	FILE *f = fopen(filename, "wb");
+	if (!f) {
+		fprintf(stderr, "save_database() fopen failure: %s\n", strerror(errno));
+		pthread_mutex_unlock(&mem_control->mutex);
+		return;
+	}
+	if (fwrite(&mem_control->user_count, sizeof(int), 1, f) != 1) {
+		fprintf(stderr, "save_database() fwrite failure\n");
+		pthread_mutex_unlock(&mem_control->mutex);
+		return;
+	}
+	for (int i = 0; i < mem_control->user_count; i++) {
+		if (fwrite(mem_control->users[i], sizeof(User), 1, f) != 1) {
+			fprintf(stderr, "save_database() fwrite failure\n");
+			pthread_mutex_unlock(&mem_control->mutex);
+			return;
+		}
+	}
+	
+//	save_node(f, root);
+	fclose(f);
+	pthread_mutex_unlock(&mem_control->mutex);
+}
+
+Node *load_node(FILE *f) {
+	Node *node = alloc_shared(sizeof(Node));
+	if (!node) {
+		fprintf(stderr, "load_node() malloc failure\n");
+		return NULL;
+	}
+	if (fread(node, sizeof(Node), 1, f) != 1) {
+		fprintf(stderr, "load_node() fread() failure: %s\n", strerror(errno));
+		printf("%p\n", node);	
+		// free(node);
+		// return NULL;
+	}
+	// node->child = load_node(f);
+	// node->sibling = load_node(f);
+	// if (node->child) node->child->parent = node;
+	return node;
+}
+
+void load_database(const char *filename) {
+	pthread_mutex_lock(&mem_control->mutex);
+	FILE *f = fopen(filename, "rb");
+	if (!f) {
+		pthread_mutex_unlock(&mem_control->mutex);
+		fprintf(stderr, "No database to init. Starting from scratch\n");
+		return;
+	}
+	fprintf(stderr, "Database found and initialized\n");
+	/*
+	mem_control = alloc_shared(sizeof(SharedMemControl));
+	if (!mem_control) {
+		fclose(f);
+		pthread_mutex_unlock(&mem_control->mutex);
+		fprintf(stderr, "load_database() alloc_shared failure\n");
+		return;
+	}
+	*/
+
+	if (fread(&mem_control->user_count, sizeof(int), 1, f) != 1) {
+		fclose(f);
+		pthread_mutex_unlock(&mem_control->mutex);
+		fprintf(stderr, "load_database() fread usercount failure\n");
+		return;	
+	}
+	for (int i = 0; i < mem_control->user_count; i++) {
+		mem_control->users[i] = alloc_shared(sizeof(User));
+		if (fread(mem_control->users[i], sizeof(User), 1, f) != 1) {
+			fclose(f);
+			pthread_mutex_unlock(&mem_control->mutex);
+			fprintf(stderr, "load_database() fread user failure\n");
+			return;	
+		}
+	}
+	// root = load_node(f);
+	fclose(f);
+	pthread_mutex_unlock(&mem_control->mutex);
+	return;
+
+}
+
+void init_saved_database(void) {
+	load_database("database.dat");
+/*	if (!mem_control) {
+		mem_control = alloc_shared(sizeof(SharedMemControl));
+		mem_control->user_count = 0;
+		memset(mem_control->users, 0, sizeof(mem_control->users));
+		memset(mem_control->hash_table, 0, sizeof(mem_control->hash_table));
+		pthread_mutex_init(&mem_control->mutex, NULL);
+		root = create_root_node();
+	}
+*/
+}
+
+
 void cleanup_database(void) {
+	fprintf(stderr, "Saving database\n");
+	save_database("database.dat");
 	if (mem_control && mem_control->shared_mem_pool) {
 		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
 		mem_control->shared_mem_pool = NULL;
@@ -766,6 +875,8 @@ void cleanup_database(void) {
 		mem_control = NULL;
 	}
 	root = NULL;
+	return;
 }
+
 
 #pragma GCC diagnostic pop

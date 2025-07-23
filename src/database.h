@@ -167,5 +167,6 @@ void free_node(Node *);
 void hash_table_init();
 void hash_table_free();
 void cleanup_database(void);
+void init_saved_database();
 
 #endif

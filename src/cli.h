@@ -22,6 +22,7 @@ typedef unsigned char int8;
 
 typedef struct s_command_handler Command_Handler;
 typedef struct s_client Client;
+typedef struct s_client_list ClientList;
 
 typedef int32 (*Callback)(Client *, char *, char *);
 
@@ -31,6 +32,11 @@ struct s_client {
 	int16 port;
 	int logged_in;
 	char username[MAX_USERNAME_LEN];
+};
+
+struct s_client_list {
+	Client *list[MAX_CONNECTION];
+	size_t count;
 };
 
 struct s_command_handler {

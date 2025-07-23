@@ -8,6 +8,7 @@ Node *curr_node = NULL;
 static char global_buf[1024];
 volatile int keep_running_child = 1;
 int active_connections = 0;
+ClientList *client_list = NULL;
 
 Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
@@ -432,9 +433,16 @@ int32 nuke_handle(Client *cli, char *folder, char *args) {
 int32 exit_handle(Client *cli, char *folder, char *args) {
 	dprintf(cli->s, "Bye now!\n");
 	keep_running_child = 0;
+	cli->logged_in = 0;
 	return 0;	
 }
 
+void log_all_users_out() {
+	for (size_t i = 0; i < client_list->count; i++) {
+		logout_handle(client_list->list[i], "", "");		
+	}
+	return;
+}
 
 Callback get_command(int8 *cmd_name) {
 	int16 n, arrlen;
@@ -503,6 +511,7 @@ void child_loop(Client *cli) {
 		}
 		cb(cli, folder, args);
 	}
+	logout_handle(cli, "", "");
 }
 
 Client *build_client_struct() {
@@ -549,12 +558,19 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	client->port = cli_port;
 	strncpy(client->ip, cli_ip, 15);
 	
+	client_list->list[client_list->count++] = client;
+
         return cli_fd;
 }
 
 int start_cli_app(int serv_fd) {
 	int cli_fd;
 	Client *client;
+	client_list = (ClientList*)malloc(sizeof(ClientList));
+	if (!client_list) {
+		fprintf(stderr, "Error Clients malloc()\n");
+		return 1;
+	}
 	while (keep_running) {
 		client = build_client_struct();
 		if (!client) continue;
@@ -580,6 +596,7 @@ int start_cli_app(int serv_fd) {
 		free(client);
 		close(cli_fd);
 	}
+	log_all_users_out();
 	return 0;
 }
 
@@ -621,6 +638,11 @@ int init_root() {
 
 int main(int argc, char *argv[]) {
 	if (init_root()) return 1;
+	init_saved_database();
+	if (!root || !mem_control) {
+		fprintf(stderr, "Failed to initialize or load database\n");
+		return 1;
+	}
 	atexit(base64_cleanup);
 	atexit(cleanup_database);
 	char *str_port;
