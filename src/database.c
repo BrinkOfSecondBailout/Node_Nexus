@@ -1221,13 +1221,12 @@ void verify_database(const char *filename) {
 
 
 int init_saved_database(void) {
-	verify_database("database.dat");
-	return 1;
+//	verify_database("database.dat");
 
-//	if (deserialize_database("database.dat")) {
-//		return 1;
-//	}
-//	return 0;
+	if (deserialize_database("database.dat")) {
+		return 1;
+	}
+	return 0;
 
 }
 

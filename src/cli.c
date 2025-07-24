@@ -542,7 +542,6 @@ int cli_accept_cli(Client *client, int serv_fd) {
 
         memset(&cli_addr, 0, sizeof(cli_addr));
         socklen_t addrlen = sizeof(cli_addr);
-
         cli_fd = accept(serv_fd, (struct sockaddr *)&cli_addr, &addrlen);
         if (cli_fd < 0) {
                 fprintf(stderr, "cli_accept() failure\n");
@@ -553,7 +552,7 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	
 	cli_port = (int16)htons((int)cli_addr.sin_port);
 	cli_ip = inet_ntoa(cli_addr.sin_addr);
-	// printf("Connection from %s:%d\n", cli_ip, cli_port);
+	printf("Connection from %s:%d\n", cli_ip, cli_port);
 
 	client->s = cli_fd;
 	client->port = cli_port;
@@ -572,6 +571,7 @@ int start_cli_app(int serv_fd) {
 		fprintf(stderr, "Error Clients malloc()\n");
 		return 1;
 	}
+	client_list->count = 0;
 	while (keep_running) {
 		client = build_client_struct();
 		if (!client) continue;
@@ -581,7 +581,7 @@ int start_cli_app(int serv_fd) {
 			fprintf(stderr, "start_cli_app() failure\n");
 			continue;
 		}
-	//	printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
+		printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
 
 		if (!fork()) {
 			close(serv_fd);
@@ -643,11 +643,8 @@ int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
 	if (init_saved_database()) {
 		
-		return 0;
-
-		
-	//	fprintf(stderr, "Initializing new database\n");
-	//	if (init_root()) return 1;
+		fprintf(stderr, "Initializing new database\n");
+		if (init_root()) return 1;
 	}
 	atexit(base64_cleanup);
 	atexit(cleanup_database);
