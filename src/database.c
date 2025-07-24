@@ -22,7 +22,7 @@ void *alloc_shared(size_t size) {
 	}
 	void *ptr = (char *)mem_control->shared_mem_pool + mem_control->shared_mem_used;
 	mem_control->shared_mem_used += size;
-	fprintf(stderr, "PID: %d: Mempool size: %ld\n", getpid(), mem_control->shared_mem_used);
+//	fprintf(stderr, "PID: %d: Mempool size: %ld\n", getpid(), mem_control->shared_mem_used);
 	return ptr;
 }
 
@@ -310,8 +310,8 @@ static void add_node_to_table(Node *node) {
 	entry->next = mem_control->node_hash_table[index];
 	mem_control->node_hash_table[index] = entry;
 	mem_control->node_count++;
-	printf("New node: %s\n", node->key);
-	printf("Node count: %ld\n", mem_control->node_count);
+	// printf("New node: %s\n", node->key);
+	// printf("Node count: %ld\n", mem_control->node_count);
 	return;
 }
 
@@ -783,49 +783,100 @@ void free_node(Node *node) {
 		free_node(node->child);
 	}
 }
+
+int serialize_node(FILE *f, Node *node) {
+	uint32_t null_marker = 0xFFFFFFFF;
+	if (!node) {
+		fwrite(&null_marker, sizeof(uint32_t), 1, f);
+		return 0;
+	}
+	uint32_t child_count = 0, sibling_count = 0, leaf_count = 0;
+	Node *n;
+	for (n = node->child; n; n = n->sibling) child_count++;
+	for (n = node->sibling; n; n = n->sibling) sibling_count++;
+	Leaf *l;
+	for (l = node->leaf; l; l = l->sibling) leaf_count++;
+	
+	if (fwrite(&child_count, sizeof(uint32_t), 1, f) != 1 
+		|| fwrite(&sibling_count, sizeof(uint32_t), 1, f) != 1
+		|| fwrite(&leaf_count, sizeof(uint32_t), 1, f) != 1) {
+		fprintf(stderr, "serialize_node() fwrite counts failed\n");
+		return 1;
+	}
+
+	size_t path_len = strlen(node->path) + 1;
+	size_t node_key_len = strlen(node->key) + 1;
+	if (fwrite(&path_len, sizeof(size_t), 1, f) != 1
+		|| fwrite(node->path, path_len, 1, f) != 1
+		|| fwrite(&node_key_len, sizeof(size_t), 1, f) != 1
+		|| fwrite(node->key, node_key_len, 1, f) != 1) {
+		fprintf(stderr, "serialize_node() fwrite path and key failed\n");
+		return 1;
+	}
+
+	for (l = node->leaf; l; l = l->sibling) {
+		size_t leaf_key_len = strlen(l->key) + 1;
+		if (fwrite(&leaf_key_len, sizeof(size_t), 1, f) != 1
+			|| fwrite(l->key, leaf_key_len, 1, f) != 1
+			|| fwrite(&l->type, sizeof(ValueType), 1, f) != 1) {
+			fprintf(stderr, "serialize_node() fwrite leaf failed\n");
+			return 1;
+		}
+		switch (l->type) {
+			case VALUE_STRING:
+				size_t value_len = strlen(l->value.string) + 1;
+				if (fwrite(&value_len, sizeof(size_t), 1, f) != 1
+					|| fwrite(l->value.string, value_len, 1, f) != 1) {
+					fprintf(stderr, "serialize_node() fwrite string failed\n");
+					return 1;
+				}
+				break;
+			case VALUE_INT:
+				if (fwrite(&l->value.integer, sizeof(int32_t), 1, f) != 1) {
+					fprintf(stderr, "serialize_node() fwrite int failed\n");
+					return 1;
+				}
+				break;
+			case VALUE_DOUBLE:
+				if (fwrite(&l->value.floating, sizeof(double), 1, f) != 1) {
+					fprintf(stderr, "serialize_node() fwrite double failed\n");
+					return 1;
+				}
+				break;
+			case VALUE_BINARY:
+				if (fwrite(&l->value.binary.size, sizeof(size_t), 1, f) != 1
+					|| fwrite(l->value.binary.data, l->value.binary.size, 1, f) != 1
+					|| fwrite(&l->value.binary.compressed, sizeof(int), 1, f) != 1) {
+					fprintf(stderr, "serialize_node() fwrite binary failed\n");
+					return 1;
+				}
+				break;
+		}
+	}
+
+	if (serialize_node(f, node->child) || serialize_node(f, node->sibling)) {
+		return 1;
+	}
+	return 0;
+}
+
+
+int serialize_all_nodes(FILE *f) {
+	serialize_node(f, root);
+	return 0;	
+}
 /*
-void node_hash_table_free() {
-	if (!mem_control) {
-		fprintf(stderr, "node_hash_table_free: mem_control is NULL\n");
-		return;
+int serialize_number_of_nodes(FILE *f) {
+	if (fwrite(&mem_control->node_count, sizeof(size_t), 1, f) != 1) {
+		fprintf(stderr, "Error serializing number of nodes\n");
+		return 1;
 	}
-	for (int i = 0; i < mem_control->node_count; i++) {
-		NodeHashEntry *entry = mem_control->node_hash_table[i];
-		while (entry) {
-			NodeHashEntry *next = entry->next;
-			entry = next;
-		}
-		mem_control->node_hash_table[i] = NULL;
-	}
-	mem_control->node_count = 0;
-}
+	fprintf(stderr, "Serialized success: number of nodes %ld\n", mem_control->node_count);
+	return 0;
+} */
 
-void leaf_hash_table_free() {
-	if (!mem_control) {
-		fprintf(stderr, "leaf_hash_table_free: mem_control is NULL\n");
-		return;
-	}
-	for (int i = 0; i < mem_control->leaf_count; i++) {
-		LeafHashEntry *entry = mem_control->leaf_hash_table[i];
-		while (entry) {
-			LeafHashEntry *next = entry->next;
-			//free(entry);
-			entry = next;
-		}
-		mem_control->leaf_hash_table[i] = NULL;
-	}
-	mem_control->leaf_count = 0;
-}
-*/
-void write_node(FILE *f, Node *node, int count) {
-	if (!node) return;
-	if (fwrite(node, sizeof(Node), count, f) != count) {
-		fprintf(stderr, "save_node() fwrite error\n");	
-	}
-	return;
-}
-
-void save_database(const char *filename) {
+void serialize_database(const char *filename) {
+	//if (mem_control->user_count == 0 && mem_control->node_count <= 1 && mem_control->leaf_count == 0) return;
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "wb");
 	if (!f) {
@@ -833,100 +884,356 @@ void save_database(const char *filename) {
 		pthread_mutex_unlock(&mem_control->mutex);
 		return;
 	}
-	if (fwrite(&mem_control->user_count, sizeof(int), 1, f) != 1) {
+	if (fwrite(&mem_control->user_count, sizeof(size_t), 1, f) != 1) {
 		fprintf(stderr, "save_database() fwrite failure\n");
 		pthread_mutex_unlock(&mem_control->mutex);
 		return;
 	}
-	for (int i = 0; i < mem_control->user_count; i++) {
+	for (size_t i = 0; i < mem_control->user_count; i++) {
 		if (fwrite(mem_control->users[i], sizeof(User), 1, f) != 1) {
 			fprintf(stderr, "save_database() fwrite failure\n");
 			pthread_mutex_unlock(&mem_control->mutex);
 			return;
 		}
 	}
-	if (root->child) {
-		fprintf(stderr, "Root has children, saving nodes\n");
-		write_node(f, root, 1);
+	if (mem_control->node_count > 1 || mem_control->leaf_count > 0) {
+		fprintf(stderr, "Database has folders or files, saving...\n");
+		/*if (serialize_number_of_nodes(f)) {
+			pthread_mutex_unlock(&mem_control->mutex);
+			return;
+		} */
+		if (serialize_all_nodes(f)) {
+			fprintf(stderr, "serialize_database() serialize_all_nodes failed\n");
+			fclose(f);
+			pthread_mutex_unlock(&mem_control->mutex);
+			return;
+		}
 	} else {
-		fprintf(stderr, "Root has no children, no nodes saved\n"); 
+		fprintf(stderr, "Database has no folders or files, nothing to save.\n"); 
 	}
 	fclose(f);
 	pthread_mutex_unlock(&mem_control->mutex);
+	return;
 }
 
-Node *read_node(FILE *f, int count) {
+Node *deserialize_node(FILE *f, Node *parent) {
+	uint32_t child_count, sibling_count, leaf_count;
+	if (fread(&child_count, sizeof(uint32_t), 1, f) != 1) {
+		if (feof(f)) return NULL;
+		fprintf(stderr, "deserialize_node() fread child_count failed\n");
+		return NULL;
+	}
+	if (child_count == 0xFFFFFFFF) return NULL;
+	if (fread(&sibling_count, sizeof(uint32_t), 1, f) != 1 
+			|| fread(&leaf_count, sizeof(uint32_t), 1, f) != 1) {
+		fprintf(stderr, "deserialize_node() fread sibling and leaf counts failed\n");
+		return NULL;
+	}
+
 	Node *node = alloc_shared(sizeof(Node));
 	if (!node) {
-		fprintf(stderr, "read_node() malloc failure\n");
+		fprintf(stderr, "deserialize_node() alloc shared failed\n");
 		return NULL;
 	}
-	if (fread(node, sizeof(Node), count, f) != count) {
-		fprintf(stderr, "read_node() fread() failure: %s\n", strerror(errno));
-		free(node);
+	zero(node, sizeof(Node));
+	node->parent = parent;
+	size_t path_len;
+	if (fread(&path_len, sizeof(size_t), 1, f) != 1 
+			|| path_len > MAX_PATH_LEN 
+			|| fread(node->path, path_len, 1, f) != 1) {
+		fprintf(stderr, "deserialize_node() fread path failed\n");
 		return NULL;
 	}
+	size_t node_key_len;
+	if (fread(&node_key_len, sizeof(size_t), 1, f) != 1 
+			|| node_key_len > MAX_KEY_LEN 
+			|| fread(node->key, node_key_len, 1, f) != 1) {
+		fprintf(stderr, "deserialize_node() fread key failed\n");
+		return NULL;
+	}
+	add_node_to_table(node);
+	
+	Leaf *prev_leaf = NULL;
+	for (uint32_t i = 0; i < leaf_count; i++) {
+		Leaf *leaf = alloc_shared(sizeof(Leaf));
+		if (!leaf) {
+			fprintf(stderr, "deserialize_node() alloc shared leaf failed\n");
+			return NULL;
+		}
+		zero(leaf, sizeof(Leaf));
+		leaf->parent = node;
+		size_t leaf_key_len;
+		if (fread(&leaf_key_len, sizeof(size_t), 1, f) != 1 
+				|| leaf_key_len > MAX_KEY_LEN 
+				|| fread(leaf->key, leaf_key_len, 1, f) != 1 
+				|| fread(&leaf->type, sizeof(ValueType), 1, f) != 1) {
+			fprintf(stderr, "deserialize_node() fread leaf failed\n");
+			return NULL;
+		}
+		switch(leaf->type) {
+			case VALUE_STRING:
+				size_t value_len;
+				if (fread(&value_len, sizeof(size_t), 1, f) != 1) {
+					fprintf(stderr, "deserialize_node() fread string length failed\n");
+					return NULL;
+				}
+				leaf->value.string = alloc_shared(value_len);
+				if (!leaf->value.string || fread(leaf->value.string, value_len, 1, f) != 1) {
+					fprintf(stderr, "deserialize_node() fread string failed\n");
+					return NULL;
+				}
+				break;
+			case VALUE_INT:
+				if (fread(&leaf->value.integer, sizeof(int32_t), 1, f) != 1) {
+                    			fprintf(stderr, "deserialize_node: fread int failed\n");
+                    			return NULL;
+                		}
+                		break;
+            		case VALUE_DOUBLE:
+                		if (fread(&leaf->value.floating, sizeof(double), 1, f) != 1) {
+                    			fprintf(stderr, "deserialize_node: fread double failed\n");
+                    			return NULL;
+                		}
+                		break;
+            		case VALUE_BINARY:
+                		if (fread(&leaf->value.binary.size, sizeof(size_t), 1, f) != 1) {
+                    			fprintf(stderr, "deserialize_node: fread binary size failed\n");
+                    			return NULL;
+                		}
+                		leaf->value.binary.data = alloc_shared(leaf->value.binary.size);
+                		if (!leaf->value.binary.data 
+						|| fread(leaf->value.binary.data, leaf->value.binary.size, 1, f) != 1) {
+                    			fprintf(stderr, "deserialize_node: fread binary data failed\n");
+                    			return NULL;
+                		}
+                		if (fread(&leaf->value.binary.compressed, sizeof(int), 1, f) != 1) {
+                    			fprintf(stderr, "deserialize_node: fread binary compressed flag failed\n");
+                    			return NULL;
+                		}
+                		break;
+		}
+		add_leaf_to_table(leaf);
+		if (prev_leaf) prev_leaf->sibling = leaf;
+		else node->leaf = leaf;
+		prev_leaf = leaf;
+	}
+
+	node->child = deserialize_node(f, node);
+	node->sibling = deserialize_node(f, parent);
+
 	return node;
 }
 
-void load_database(const char *filename) {
+int deserialize_database(const char *filename) {
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "rb");
 	if (!f) {
+		fprintf(stderr, "deserialize_database fopen failed\n");
 		pthread_mutex_unlock(&mem_control->mutex);
-		fprintf(stderr, "No database to init. Starting from scratch\n");
-		return;
+		return 1;
 	}
-	fprintf(stderr, "Database found and initialized\n");
-	/*
-	mem_control = alloc_shared(sizeof(SharedMemControl));
-	if (!mem_control) {
-		fclose(f);
-		pthread_mutex_unlock(&mem_control->mutex);
-		fprintf(stderr, "load_database() alloc_shared failure\n");
-		return;
-	}
-	*/
+	fprintf(stderr, "Database found. Initializing...\n");
 
-	if (fread(&mem_control->user_count, sizeof(int), 1, f) != 1) {
+	if (fread(&mem_control->user_count, sizeof(size_t), 1, f) != 1) {
 		fclose(f);
 		pthread_mutex_unlock(&mem_control->mutex);
 		fprintf(stderr, "load_database() fread usercount failure\n");
-		return;	
+		return 1;	
 	}
-	for (int i = 0; i < mem_control->user_count; i++) {
+	for (size_t i = 0; i < mem_control->user_count; i++) {
 		mem_control->users[i] = alloc_shared(sizeof(User));
 		if (fread(mem_control->users[i], sizeof(User), 1, f) != 1) {
 			fclose(f);
 			pthread_mutex_unlock(&mem_control->mutex);
 			fprintf(stderr, "load_database() fread user failure\n");
-			return;	
+			return 1;	
 		}
 	}
-	// root = load_node(f);
+
+	/* if (fread(&mem_control->node_count, sizeof(int), 1, f) != 1) {
+		fclose(f);
+		pthread_mutex_unlock(&mem_control->mutex);
+		fprintf(stderr, "load_database() fread nodecount failure\n");
+		return 1;
+	}
+	fprintf(stderr, "Success read number of nodes: %ld\n", mem_control->node_count);
+	*/
+	root = deserialize_node(f, NULL);
+	if (!root) {
+		fprintf(stderr, "deserialize_database: deserialize_node failed\n");
+		fclose(f);
+		pthread_mutex_unlock(&mem_control->mutex);
+		return 1;
+	}
+
+	fprintf(stderr, "Successfully loaded saved database from %s\n", filename);
 	fclose(f);
 	pthread_mutex_unlock(&mem_control->mutex);
-	return;
+	return 0;
 
 }
 
-void init_saved_database(void) {
-	load_database("database.dat");
-/*	if (!mem_control) {
-		mem_control = alloc_shared(sizeof(SharedMemControl));
-		mem_control->user_count = 0;
-		memset(mem_control->users, 0, sizeof(mem_control->users));
-		memset(mem_control->hash_table, 0, sizeof(mem_control->hash_table));
-		pthread_mutex_init(&mem_control->mutex, NULL);
-		root = create_root_node();
+void verify_database(const char *filename) {
+	FILE *f = fopen(filename, "rb");
+	if (!f) {
+		fprintf(stderr, "verify_database: fopen failed: %s\n", strerror(errno));
+		return;
 	}
-*/
+	size_t user_count;
+	if (fread(&user_count, sizeof(size_t), 1, f) != 1) {
+		fprintf(stderr, "verify_database: fread user_count failed: %s\n", strerror(errno));
+		fclose(f);
+		return;
+	}
+	printf("User count: %zu\n", user_count);
+	for (size_t i = 0; i < user_count; i++) {
+		User user;
+		if (fread(&user, sizeof(User), 1, f) != 1) {
+		    fprintf(stderr, "verify_database: fread user %zu failed: %s\n", i, strerror(errno));
+		    fclose(f);
+		    return;
+		}
+		printf("User %zu: username=%s, logged_in=%d\n", i, user.username, user.logged_in);
+		printf("Password hash: ");
+		for (int j = 0; j < SHA256_DIGEST_LENGTH; j++) {
+		    printf("%02x", user.password_hash[j]);
+		}
+		printf("\n");
+	}
+
+	printf("Node tree:\n");
+	while (!feof(f)) {
+		uint32_t child_count, sibling_count, leaf_count;
+		if (fread(&child_count, sizeof(uint32_t), 1, f) != 1) {
+		    if (feof(f)) break;
+		    fprintf(stderr, "verify_database: fread child_count failed: %s\n", strerror(errno));
+		    fclose(f);
+		    return;
+		}
+		if (child_count == 0xFFFFFFFF) {
+		    printf("(null node)\n");
+		    continue;
+		}
+		if (fread(&sibling_count, sizeof(uint32_t), 1, f) != 1 ||
+		    fread(&leaf_count, sizeof(uint32_t), 1, f) != 1) {
+		    fprintf(stderr, "verify_database: fread counts failed: %s\n", strerror(errno));
+		    fclose(f);
+		    return;
+		}
+		size_t path_len;
+		char path[MAX_PATH_LEN];
+		size_t node_key_len;
+		char node_key[MAX_KEY_LEN];
+		if (fread(&path_len, sizeof(size_t), 1, f) != 1 
+			|| path_len > MAX_PATH_LEN 
+			|| fread(path, path_len, 1, f) != 1
+			|| fread(&node_key_len, sizeof(size_t), 1, f) != 1
+			|| node_key_len > MAX_KEY_LEN
+			|| fread(node_key, node_key_len, 1, f) != 1) {
+		    fprintf(stderr, "verify_database: fread path failed\n");
+		    fclose(f);
+		    return;
+		}
+		path[path_len - 1] = '\0';
+		node_key[node_key_len - 1] = '\0';
+		printf("Node: path=%s, key=%s, children=%u, siblings=%u, leaves=%u\n", path, node_key, child_count, sibling_count, leaf_count);
+        
+		for (uint32_t i = 0; i < leaf_count; i++) {
+		    size_t key_len;
+		    char key[MAX_KEY_LEN];
+		    ValueType type;
+		    if (fread(&key_len, sizeof(size_t), 1, f) != 1 ||
+			key_len > MAX_KEY_LEN ||
+			fread(key, key_len, 1, f) != 1 ||
+			fread(&type, sizeof(ValueType), 1, f) != 1) {
+			fprintf(stderr, "verify_database: fread leaf failed\n");
+			fclose(f);
+			return;
+		    }
+		    key[key_len - 1] = '\0';
+		    printf("  Leaf: key=%s, type=", key);
+		    switch (type) {
+			case VALUE_STRING:
+			    {
+				size_t value_len;
+				if (fread(&value_len, sizeof(size_t), 1, f) != 1) {
+				    fprintf(stderr, "verify_database: fread string length failed\n");
+                            fclose(f);
+                            return;
+                        }
+                        char *value = malloc(value_len);
+                        if (!value || fread(value, value_len, 1, f) != 1) {
+                            fprintf(stderr, "verify_database: fread string failed\n");
+                            free(value);
+                            fclose(f);
+                            return;
+                        }
+                        value[value_len - 1] = '\0';
+                        printf("STRING, value=%s\n", value);
+                        free(value);
+                    }
+                    break;
+                case VALUE_INT:
+                    {
+                        int32_t value;
+                        if (fread(&value, sizeof(int32_t), 1, f) != 1) {
+                            fprintf(stderr, "verify_database: fread int failed\n");
+                            fclose(f);
+                            return;
+                        }
+                        printf("INT, value=%d\n", value);
+                    }
+                    break;
+                case VALUE_DOUBLE:
+                    {
+                        double value;
+                        if (fread(&value, sizeof(double), 1, f) != 1) {
+                            fprintf(stderr, "verify_database: fread double failed\n");
+                            fclose(f);
+                            return;
+                        }
+                        printf("DOUBLE, value=%.2f\n", value);
+                    }
+                    break;
+                case VALUE_BINARY:
+                    {
+                        size_t size;
+                        int compressed;
+                        if (fread(&size, sizeof(size_t), 1, f) != 1) {
+                            fprintf(stderr, "verify_database: fread binary size failed\n");
+                            fclose(f);
+                            return;
+                        }
+                        fseek(f, size, SEEK_CUR); // Skip binary data
+                        if (fread(&compressed, sizeof(int), 1, f) != 1) {
+                            fprintf(stderr, "verify_database: fread binary compressed flag failed\n");
+                            fclose(f);
+                            return;
+                        }
+                        printf("BINARY, size=%zu, compressed=%d\n", size, compressed);
+                    }
+                    break;
+            }
+        }
+    }
+    fclose(f);
 }
 
+
+int init_saved_database(void) {
+	verify_database("database.dat");
+	return 1;
+
+//	if (deserialize_database("database.dat")) {
+//		return 1;
+//	}
+//	return 0;
+
+}
 
 void cleanup_database(void) {
 	fprintf(stderr, "Saving database\n");
-	save_database("database.dat");
+	serialize_database("database.dat");
 	if (mem_control && mem_control->shared_mem_pool) {
 		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
 		mem_control->shared_mem_pool = NULL;

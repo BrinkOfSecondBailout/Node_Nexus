@@ -179,6 +179,6 @@ void node_hash_table_init();
 void leaf_hash_table_init();
 // void leaf_hash_table_free();
 void cleanup_database(void);
-void init_saved_database();
+int init_saved_database();
 
 #endif

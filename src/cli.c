@@ -471,7 +471,7 @@ void zero_multiple(void *buf,...) {
 
 void child_loop(Client *cli) {
 	char buf[256] = {0};
-	fprintf(stderr, "child_loop: Client %d, root=%p\n", getpid(), (void*)root);
+//	fprintf(stderr, "child_loop: Client %d, root=%p\n", getpid(), (void*)root);
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
@@ -553,7 +553,7 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	
 	cli_port = (int16)htons((int)cli_addr.sin_port);
 	cli_ip = inet_ntoa(cli_addr.sin_addr);
-	printf("Connection from %s:%d\n", cli_ip, cli_port);
+	// printf("Connection from %s:%d\n", cli_ip, cli_port);
 
 	client->s = cli_fd;
 	client->port = cli_port;
@@ -581,15 +581,14 @@ int start_cli_app(int serv_fd) {
 			fprintf(stderr, "start_cli_app() failure\n");
 			continue;
 		}
-		printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
+	//	printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
 
 		if (!fork()) {
 			close(serv_fd);
 			struct pollfd pfd = { .fd = client->s, .events = POLLIN };
 			int ret = poll(&pfd, 1, 0);
-			printf("%d\n", ret);
 			if (ret <= 0 || !(pfd.revents & POLLIN)) {
-				dprintf(client->s, "100 - Connected to server\nType 'help' for all available commands\n");
+				dprintf(client->s, "Connected to server\nType 'help' for all available commands\n");
 			}
 			child_loop(client);
 			exit(0);
@@ -601,8 +600,7 @@ int start_cli_app(int serv_fd) {
 	return 0;
 }
 
-int init_root() {
-	fprintf(stderr, "init_root: Creating root node\n");
+int init_mem_control() {
 	mem_control = mmap(NULL, sizeof(SharedMemControl), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (mem_control == MAP_FAILED) {
 		fprintf(stderr, "mmap failed for mem_control: %s\n", strerror(errno));
@@ -625,6 +623,10 @@ int init_root() {
 	pthread_mutexattr_destroy(&attr);
 	node_hash_table_init();
 	leaf_hash_table_init();
+	return 0;
+}
+int init_root() {
+	reset_database();
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");
@@ -632,17 +634,20 @@ int init_root() {
 		mem_control = NULL;
 		return 1;
 	}
+
 	curr_node = root;
-	fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
+	// fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
 	return 0;
 }
-
 int main(int argc, char *argv[]) {
-	if (init_root()) return 1;
-	init_saved_database();
-	if (!root || !mem_control) {
-		fprintf(stderr, "Failed to initialize or load database\n");
-		return 1;
+	if (init_mem_control()) return 1;
+	if (init_saved_database()) {
+		
+		return 0;
+
+		
+	//	fprintf(stderr, "Initializing new database\n");
+	//	if (init_root()) return 1;
 	}
 	atexit(base64_cleanup);
 	atexit(cleanup_database);
