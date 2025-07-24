@@ -180,5 +180,6 @@ void leaf_hash_table_init();
 // void leaf_hash_table_free();
 void cleanup_database(void);
 int init_saved_database();
+void verify_database(const char *);
 
 #endif

@@ -641,8 +641,11 @@ int init_root() {
 }
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
+/*
+	verify_database("database.dat");
+	return 0;
+*/
 	if (init_saved_database()) {
-		
 		fprintf(stderr, "Initializing new database\n");
 		if (init_root()) return 1;
 	}

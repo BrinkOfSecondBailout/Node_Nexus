@@ -102,10 +102,10 @@ static Leaf *find_last_leaf_linear(Node *parent) {
 }
 
 Leaf *find_leaf_by_hash(char *key) {
-	printf("Searching for leaf: %s\n", key);
+//	printf("Searching for leaf: %s\n", key);
 	uint32_t index = HASH_KEY(key, LEAF_HASH_TABLE_SIZE);
 	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
-	printf("Entry %p\n", entry);
+//	printf("Entry %p\n", entry);
 	while (entry) {
 		if (!strcmp(entry->key, key)) {
 			return entry->leaf;
@@ -154,7 +154,7 @@ Node *find_node_by_hash(char *key) {
 	uint32_t index = HASH_KEY(key, NODE_HASH_TABLE_SIZE);
 	NodeHashEntry *entry = mem_control->node_hash_table[index];
 	while (entry) {
-		printf("Searching for node: %s\n", key);
+//		printf("Searching for node: %s\n", key);
 		if (!strcmp(entry->key, key)) {
 			return entry->node;
 		}
@@ -382,7 +382,7 @@ static void add_leaf_to_table(Leaf *leaf) {
 	entry->next = mem_control->leaf_hash_table[index];
 	mem_control->leaf_hash_table[index] = entry;
 	mem_control->leaf_count++;
-	printf("Leaf count: %ld\n", mem_control->leaf_count);
+//	printf("Leaf count: %ld\n", mem_control->leaf_count);
 	return;
 }
 
@@ -1221,8 +1221,6 @@ void verify_database(const char *filename) {
 
 
 int init_saved_database(void) {
-//	verify_database("database.dat");
-
 	if (deserialize_database("database.dat")) {
 		return 1;
 	}
