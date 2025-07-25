@@ -5,7 +5,7 @@
 #include "base64.h"
 
 Node *curr_node = NULL;
-static char global_buf[1024];
+static char global_buf[2048];
 volatile int keep_running_child = 1;
 int active_connections = 0;
 ClientList *client_list = NULL;
@@ -30,30 +30,59 @@ Command_Handler c_handlers[] = {
 	{ (char *)"exit", exit_handle }	
 };
 
-int32 help_handle(Client *cli, char *folder, char *args) {
+int32 help_handle(Client *cli, char *unused1, char *unused2) {
 	zero(global_buf, sizeof(global_buf));
-	char *instructions = "-- 'help' - list all available command apis\n"
-	"-- 'register <username> <password> - create a new account\n"
-	"-- 'login <username> <password> - log in to an existing account\n"
-	"-- 'players' - list all current users\n"
-	"-- 'logout' - log out of current account\n"
-	"-- 'tree' - show all current folders and files\n"
-	"-- 'newdir <name>' - add new directory in current folder\n"
-	"-- 'back' - jump back one directory\n"
-	"-- 'root' - jump back to root directory\n"
-	"-- 'curr' - list current directory\n"
-	"-- 'jump <dir_name>' - find and navigate to directory by name\n"
-	"-- 'addfile <dir> <filename> -<filetype flag(s)(i)(b)(f)> <filevalue>' - \nadd a new file to a directory, use 'curr' for current directory\nfor type, use flag -s for string, -i for integer, -b for binary, -f for file\nfollowed by the file value *maximum 1MB* (or if -f, file path)\n" 
-	"-- 'open <file_name>' - find and open file by name\n"
-	"-- 'save <file_name>' - find and download binary file by name\n"
-	"-- 'kill -<flag> <name>' - find file or folder to delete, -d for dir, -f for file\n"
-	"-- 'nuke' - delete all files and folders\n"
-	"-- 'exit' - exit program\n";
+	size_t used = 0;
+	size_t remaining = sizeof(global_buf);
+	int written;
+	WRITE_GLOBAL_BUF("=== Node Nexus Command Help ===\n\n");
+        WRITE_GLOBAL_BUF("General Commands:\n"
+                       "-----------------\n"
+		       "help                			List all available commands\n"
+                       "register <user> <pass>  		Create a new account\n"
+                       "  	#Example: register alice password123\n"
+                       "login <user> <pass>    			Log in to an account\n"
+                       "  	#Example: login alice password123\n"
+                       "logout              			Log out of current account\n"
+                       "tree                			Display all directories and files\n"
+                       "newdir <name>       			Create a new directory\n"
+                       "  	#Example: newdir my_folder\n"
+                       "back                			Move to parent directory\n"
+                       "root                			Move to root directory\n"
+                       "curr                			Show current directory\n"
+                       "jump <dir_name>     			Navigate to a directory by name\n"
+                       "  	#Example: jump my_folder\n"
+                       "addfile <dir> <file> <type> <value> 	Add a file to a directory\n"
+                       "  	<dir>: 'curr' or directory name\n"
+                       "  	<type>: -s (string), -i (int), -b (binary), -f (file path)\n"
+                       "  	<value>: File content (max 1MB) or file path for -f\n"
+                       "  	#Example: addfile curr test.txt -s HelloWorld\n"
+                       "open <file_name>    			Open a file by name\n"
+                       "  	#Example: open test.txt\n"
+                       "save <file_name>    			Download a binary file\n"
+                       "  	#Example: save data.bin\n"
+                       "kill -<flag> <name> 			Delete a file or directory\n"
+                       "  	<flag>: -d (directory), -f (file)\n"
+                       "  	#Example: kill -f test.txt\n"
+                       "exit                			Exit the program\n\n");
+	WRITE_GLOBAL_BUF("Admin Commands (Admin Only):\n"
+                       "----------------------------\n"
+                       "players             			List all registered users\n"
+                       "nuke                			Delete all files and directories\n\n");
+    	// Send to client
+    	int result = dprintf(cli->s, "%s", global_buf);
+    	if (result < 0) {
+        	fprintf(stderr, "help_handle: dprintf failed: %s\n", strerror(errno));
+        	return 1;
+   	}
+    	return 0;
 
-	strncpy(global_buf, instructions, sizeof(global_buf));
-	global_buf[1024 - 1] = '\0';
-	dprintf(cli->s, "%s\n", global_buf);
-	return 0;
+	buffer_full:
+		fprintf(stderr, "help_handle: Buffer overflow prevented\n");
+		strncpy(global_buf, "Error: Help text too long\n", sizeof(global_buf));
+		global_buf[sizeof(global_buf) - 1] = '\0';
+		dprintf(cli->s, "%s\n", global_buf);
+		return 1;
 }
 
 int32 register_handle(Client *cli, char *username, char *args) {
@@ -116,6 +145,10 @@ int32 login_handle(Client *cli, char *username, char *args) {
 }
 
 int32 players_handle(Client *cli, char *unused1, char *unused2) {
+	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
+		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
+		return 1;
+	}
 	if (mem_control->user_count == 1) { // don't show admin
 		strncpy(global_buf, "No registered users currently..\n", sizeof(global_buf));
 		global_buf[sizeof(global_buf) - 1] = '\0';
@@ -420,6 +453,10 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 int32 nuke_handle(Client *cli, char *folder, char *args) {
 	if (!cli->logged_in) {
 		dprintf(cli->s, "Please register or log in first to modify database\n");
+		return 1;
+	}
+	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
+		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
 		return 1;
 	}
 	char buffer[256] = {0};

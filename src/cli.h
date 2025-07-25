@@ -16,6 +16,15 @@
 #define HOST				"127.0.0.1"
 #define MAX_FILE_UPLOAD			1048576 //1MB
 #define MAX_USERNAME_LEN		32
+
+#define WRITE_GLOBAL_BUF(x)		written = snprintf(global_buf + used, remaining, x); \
+					if (written < 0 || (size_t)written >= remaining) goto buffer_full; \
+					used += written; \
+					remaining -= written; 
+
+
+
+
 typedef unsigned int int32;
 typedef unsigned short int int16;
 typedef unsigned char int8;
