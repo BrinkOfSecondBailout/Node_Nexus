@@ -14,7 +14,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
 	{ (char *)"register", register_handle },
 	{ (char *)"login", login_handle },
-	{ (char *)"players", players_handle},
+	{ (char *)"users", users_handle},
 	{ (char *)"logout", logout_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
@@ -67,7 +67,7 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
                        "exit                			Exit the program\n\n");
 	WRITE_GLOBAL_BUF("Admin Commands (Admin Only):\n"
                        "----------------------------\n"
-                       "players             			List all registered users\n"
+                       "users             			List all registered users\n"
                        "nuke                			Delete all files and directories\n\n");
     	// Send to client
     	int result = dprintf(cli->s, "%s", global_buf);
@@ -144,21 +144,23 @@ int32 login_handle(Client *cli, char *username, char *args) {
 	return 1;
 }
 
-int32 players_handle(Client *cli, char *unused1, char *unused2) {
+int32 users_handle(Client *cli, char *unused1, char *unused2) {
 	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
 		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
 		return 1;
 	}
-	if (mem_control->user_count == 1) { // don't show admin
+	if (mem_control->user_count == 0) {
 		strncpy(global_buf, "No registered users currently..\n", sizeof(global_buf));
 		global_buf[sizeof(global_buf) - 1] = '\0';
 	} else {
 		zero(global_buf, sizeof(global_buf));
+		size_t remaining = sizeof(global_buf);
 		size_t used = 0;
+		int written;
+
 		for (size_t i = 0; i < mem_control->user_count; i++) {
 			User *user = mem_control->users[i];
 			if (!user) continue;
-			if (strcmp(user->username, ADMIN_USERNAME) == 0) continue;
 			size_t remaining = sizeof(global_buf) - used;
 			int written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "-online" : "offline");
 			if (written < 0 || (size_t)written >= remaining) {
