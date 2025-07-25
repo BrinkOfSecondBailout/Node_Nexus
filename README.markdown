@@ -2,12 +2,12 @@
 
 ## Overview
 
-Node Nexus is a lightweight, socket-based server written in C that implements a custom in-memory database for managing a hierarchical file system. Designed as a learning project to demonstrate advanced systems programming concepts, it features user authentication, a tree-based data structure, and binary serialization for persistent storage. Instead of relying on a traditional database like SQLite, Node Nexus uses a custom in-memory database to showcase low-level memory management, thread-safe operations, and efficient binary serialization/deserialization.
+Node Nexus is a lightweight, socket-based server written in C that implements a custom in-memory database for managing a hierarchical file system. Designed as a learning project to demonstrate advanced systems programming concepts, it features user authentication, a tree-based data structure, and binary serialization for persistent storage. Instead of relying on a traditional database like SQLite, Node Nexus uses a custom in-memory database to showcase low-level memory management, thread-safe operations, and efficient binary serialization/deserialization. Multiple clients can connect to the server safely and effectively at once (up to a limit of course).
 
 ### Key Features
 
 - **Custom In-Memory Database**: Stores data in a tree of nodes and leaves, managed in shared memory using `mmap` for efficient allocation and deallocation.
-- **Binary Serialization**: Persists the database to `database.dat` using a custom binary format, optimized with `zlib` compression for binary data, demonstrating serialization techniques without a traditional database.
+- **Binary Serialization**: Persists the database to `database.dat` using a custom binary format, optimized with `zlib` compression for binary data, showcasing serialization techniques without a traditional database.
 - **User Authentication**: Supports user registration, login/logout, and a preset admin user (`admin`) with a password set via an environment variable for security.
 - **Thread-Safe Operations**: Uses `pthread` mutexes to ensure safe concurrent access in a multi-client environment.
 - **Command-Line Interface**: Offers a rich set of commands for navigating and manipulating the file system, with admin-only commands for managing users and resetting the database.
@@ -19,11 +19,9 @@ Node Nexus is a lightweight, socket-based server written in C that implements a 
 Node Nexus intentionally avoids traditional databases (e.g., SQLite, PostgreSQL) to demonstrate proficiency in:
 
 - **Memory Management**: Uses `mmap` to allocate a shared memory pool, managing nodes, leaves, and users with custom allocation (`alloc_shared`) and cleanup (`munmap`). This showcases fine-grained control over memory without relying on database engines.
-- **Binary Serialization/Deserialization**: Persists the entire database (users, nodes, leaves) to a binary file (`database.dat`) with a custom format, including counts for children, siblings, and leaves, and compressed binary data. This highlights understanding of data structures, file I/O, and serialization techniques.
-- **Performance Optimization**: Implements a hash table for fast leaf lookups and a `dirty` flag to avoid unnecessary saves, demonstrating efficient data access and storage strategies.
-- **Thread Safety**: Ensures all database operations are protected by a mutex, showcasing concurrent programming skills in a server context.
-
-By building a custom database, Node Nexus provides a hands-on exploration of systems programming concepts, making it a valuable portfolio piece for a junior developer.
+- **Binary Serialization/Deserialization**: Persists the entire database (users, nodes, leaves) to a binary file (`database.dat`) with a custom format, including counts for children, siblings, and leaves, and compressed binary data.
+- **Performance Optimization**: Implements a hash table for fast leaf lookups and a `dirty` flag to avoid unnecessary saves, for efficient data access and storage strategies.
+- **Thread Safety**: Ensures all database operations are protected by a mutex, avoiding undefined behaviors and crashes due to potential overlapping database changes.
 
 ## Installation
 
@@ -50,7 +48,7 @@ sudo apt install build-essential libz-dev libssl-dev
 
 2. Compile the server:
    ```bash
-   gcc -o node_nexus cli.c database.c myserver.c -lz -lcrypto
+   gcc -o nexus nexus.c database.c myserver.c -lz -lcrypto
    ```
 
 3. Set the admin password environment variable:
@@ -65,15 +63,19 @@ sudo apt install build-essential libz-dev libssl-dev
 
 4. Run the server:
    ```bash
-   ./node_nexus [port]
+   ./nexus [port]
    ```
-   Default port is defined in `myserver.c`. Example: `./node_nexus 8080`
+   Default port is defined in `myserver.c`. Example: `./node_nexus 8000`
 
 ## Usage
 
-Connect to the server using a client like `telnet`:
+Connect to the server using a client like `telnet` or `nc` (default port set at 8000 unless customized otherwise):
 ```bash
-telnet localhost 8080
+telnet localhost 8000
+
+or
+
+nc localhost 8000
 ```
 
 ### Available Commands
@@ -93,7 +95,7 @@ Run `help` to see all commands with examples. Key commands include:
   - `exit`: Exit the client.
 
 - **Admin Commands** (requires `admin` login):
-  - `players`: List non-admin users with online/offline status.
+  - `players`: List all users with online/offline status.
   - `nuke`: Delete all files and directories.
 
 ### Example Session
@@ -116,7 +118,7 @@ exit
 ## Project Structure
 
 - `database.h`/`database.c`: Implements the in-memory database, serialization, and user management.
-- `cli.h`/`cli.c`: Handles client commands and interactions.
+- `nexus.h`/`nexus.c`: Handles client commands and interactions.
 - `myserver.h`/`myserver.c`: Manages socket connections and server logic.
 - `base64.h`/`base64.c`: Provides base64 encoding/decoding for binary data.
 - `database.dat`: Binary file for persistent storage.
