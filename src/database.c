@@ -315,6 +315,24 @@ static void add_node_to_table(Node *node) {
 	return;
 }
 
+User *create_admin_user() {
+	const char *admin_password = getenv("NODE_NEXUS_ADMIN_PASSWORD");
+	if (!admin_password || strlen(admin_password) == 0) {
+		fprintf(stderr, "create_admin_user() NODE_NEXUS_ADMIN_PASSWORD environment variable not set\n");
+		return NULL;
+	}
+	if (find_user(ADMIN_USERNAME) == NULL) {
+		User *admin = create_new_user(ADMIN_USERNAME, admin_password);
+		if (!admin) {
+			fprintf(stderr, "create_admin_user() failed to create admin user\n");
+		} else {
+			fprintf(stderr, "Admin user successfully created\n");
+			return admin;
+		}
+	}
+	return NULL;
+}
+
 Node *create_root_node() {
 	Node *root = alloc_shared(sizeof(Node));
 	CHECK_NULL(root, "Failed to allocate root");
@@ -365,6 +383,7 @@ Node *create_new_node(Node *parent, char *name) {
 	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
 	printf("New node path: %s\n", new->path);	
 	add_node_to_table(new);
+	mem_control->dirty = 1;
 	pthread_mutex_unlock(&mem_control->mutex);
 	return new;
 }
@@ -411,6 +430,7 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	new->parent = parent;
 	new->sibling = NULL;
 	strncpy(new->key, key, MAX_KEY_LEN - 1);
+	mem_control->dirty = 1;
 	return new;
 }
 
@@ -510,7 +530,8 @@ User *create_new_user(const char *username, const char *password) {
 	strncpy(user->username, username, MAX_USERNAME_LEN - 1);
 	SHA256((const unsigned char *)password, strlen(password), user->password_hash);
 	mem_control->users[mem_control->user_count++] = user;
-	fprintf(stderr, "create_new_user: Created User %s\n", username);
+//	fprintf(stderr, "create_new_user: Created User %s\n", username);
+	mem_control->dirty = 1;
 	pthread_mutex_unlock(&mem_control->mutex);
 	return user;
 }
@@ -521,7 +542,7 @@ User *find_user(const char *username) {
 			return mem_control->users[i];
 		}
 	}
-	fprintf(stderr, "User not found\n");
+	// fprintf(stderr, "User not found\n");
 	return NULL;
 }
 
@@ -564,7 +585,6 @@ int verify_user(const char *username, const char *password) {
 	fprintf(stderr, "Verify_user: Password mismatch\n");
 	return 2;
 }
-
 
 
 void print_node(Node *n) {
@@ -670,6 +690,7 @@ int delete_node(Node *node) {
 				}
 			}
 			free_node(first);
+			mem_control->dirty = 1;
 			pthread_mutex_unlock(&mem_control->mutex);
 			return 0;
 		}
@@ -710,6 +731,7 @@ int delete_leaf(char *name) {
 				}
 			}
 			free_leaf(first);
+			mem_control->dirty = 1;
 			pthread_mutex_unlock(&mem_control->mutex);
 			return 0;
 		} else {
@@ -731,6 +753,7 @@ void reset_database() {
 	node_hash_table_init();
 	leaf_hash_table_init();
 	mem_control->shared_mem_used = 0;
+	mem_control->dirty = 1;
 	pthread_mutex_unlock(&mem_control->mutex);
 }
 
@@ -746,7 +769,6 @@ void free_leaf(Leaf *leaf) {
 			} else {
 				mem_control->leaf_hash_table[index] = entry->next;
 			}
-			//free(entry);
 			mem_control->leaf_count--;
 			break;
 		}
@@ -865,18 +887,8 @@ int serialize_all_nodes(FILE *f) {
 	serialize_node(f, root);
 	return 0;	
 }
-/*
-int serialize_number_of_nodes(FILE *f) {
-	if (fwrite(&mem_control->node_count, sizeof(size_t), 1, f) != 1) {
-		fprintf(stderr, "Error serializing number of nodes\n");
-		return 1;
-	}
-	fprintf(stderr, "Serialized success: number of nodes %ld\n", mem_control->node_count);
-	return 0;
-} */
 
 void serialize_database(const char *filename) {
-	//if (mem_control->user_count == 0 && mem_control->node_count <= 1 && mem_control->leaf_count == 0) return;
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "wb");
 	if (!f) {
@@ -896,20 +908,8 @@ void serialize_database(const char *filename) {
 			return;
 		}
 	}
-	if (mem_control->node_count > 1 || mem_control->leaf_count > 0) {
-		fprintf(stderr, "Database has folders or files, saving...\n");
-		/*if (serialize_number_of_nodes(f)) {
-			pthread_mutex_unlock(&mem_control->mutex);
-			return;
-		} */
-		if (serialize_all_nodes(f)) {
-			fprintf(stderr, "serialize_database() serialize_all_nodes failed\n");
-			fclose(f);
-			pthread_mutex_unlock(&mem_control->mutex);
-			return;
-		}
-	} else {
-		fprintf(stderr, "Database has no folders or files, nothing to save.\n"); 
+	if (serialize_all_nodes(f)) {
+		fprintf(stderr, "serialize_database() serialize_all_nodes failed\n");
 	}
 	fclose(f);
 	pthread_mutex_unlock(&mem_control->mutex);
@@ -1028,7 +1028,7 @@ int deserialize_database(const char *filename) {
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "rb");
 	if (!f) {
-		fprintf(stderr, "deserialize_database fopen failed\n");
+		// fprintf(stderr, "deserialize_database fopen failed\n");
 		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
@@ -1229,8 +1229,12 @@ int init_saved_database(void) {
 }
 
 void cleanup_database(void) {
-	fprintf(stderr, "Saving database\n");
-	serialize_database("database.dat");
+	if (mem_control->dirty) {
+		printf("Database change detected, saving...\n");
+		serialize_database("database.dat");
+	} else {
+		printf("Database unchanged\n");
+	}
 	if (mem_control && mem_control->shared_mem_pool) {
 		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
 		mem_control->shared_mem_pool = NULL;

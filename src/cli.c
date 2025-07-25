@@ -14,6 +14,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
 	{ (char *)"register", register_handle },
 	{ (char *)"login", login_handle },
+	{ (char *)"players", players_handle},
 	{ (char *)"logout", logout_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
@@ -34,6 +35,7 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	char *instructions = "-- 'help' - list all available command apis\n"
 	"-- 'register <username> <password> - create a new account\n"
 	"-- 'login <username> <password> - log in to an existing account\n"
+	"-- 'players' - list all current users\n"
 	"-- 'logout' - log out of current account\n"
 	"-- 'tree' - show all current folders and files\n"
 	"-- 'newdir <name>' - add new directory in current folder\n"
@@ -49,6 +51,7 @@ int32 help_handle(Client *cli, char *folder, char *args) {
 	"-- 'exit' - exit program\n";
 
 	strncpy(global_buf, instructions, sizeof(global_buf));
+	global_buf[1024 - 1] = '\0';
 	dprintf(cli->s, "%s\n", global_buf);
 	return 0;
 }
@@ -110,6 +113,30 @@ int32 login_handle(Client *cli, char *username, char *args) {
 		return 1;
 	}
 	return 1;
+}
+
+int32 players_handle(Client *cli, char *unused1, char *unused2) {
+	if (mem_control->user_count == 1) { // don't show admin
+		strncpy(global_buf, "No registered users currently..\n", sizeof(global_buf));
+		global_buf[sizeof(global_buf) - 1] = '\0';
+	} else {
+		zero(global_buf, sizeof(global_buf));
+		size_t used = 0;
+		for (size_t i = 0; i < mem_control->user_count; i++) {
+			User *user = mem_control->users[i];
+			if (!user) continue;
+			if (strcmp(user->username, ADMIN_USERNAME) == 0) continue;
+			size_t remaining = sizeof(global_buf) - used;
+			int written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "-online" : "offline");
+			if (written < 0 || (size_t)written >= remaining) {
+				fprintf(stderr, "players_handle: Buffer overflow prevented\n");
+				break;
+			}
+			used += written;
+		}
+	}
+	dprintf(cli->s, "%s\n", global_buf);
+	return 0;
 }
 
 int32 logout_handle(Client *cli, char *username, char *args) {
@@ -611,7 +638,8 @@ int init_mem_control() {
 	mem_control->shared_mem_used = 0;
 	mem_control->user_count = 0;
 	zero((void *)mem_control->users, sizeof(mem_control->users));
-	
+	mem_control->dirty = 0;
+
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
@@ -634,9 +662,10 @@ int init_root() {
 		mem_control = NULL;
 		return 1;
 	}
-
+	create_admin_user();
 	curr_node = root;
 	// fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
+	mem_control->dirty = 0;
 	return 0;
 }
 int main(int argc, char *argv[]) {

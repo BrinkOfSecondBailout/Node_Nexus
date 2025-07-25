@@ -20,6 +20,7 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic push
 
+#define ADMIN_USERNAME "admin"
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
 #define NODE_HASH_TABLE_SIZE 1024
@@ -135,6 +136,7 @@ typedef struct SharedMemControl {
 	User *users[MAX_USERS];
 	size_t user_count;
 	pthread_mutex_t mutex;
+	int dirty;
 } SharedMemControl;
 
 extern SharedMemControl *mem_control;
@@ -147,6 +149,7 @@ void zero(void *, size_t);
 // void print_leaves_of_node(Node *, int8, int);
 // void print_node_and_leaves(Node *, int8, int );
 void print_tree(int, Node *);
+User *create_admin_user();
 Node *create_root_node();
 // Node *find_first_child_node(Node *);
 // Node *find_last_child_node_linear(Node *);

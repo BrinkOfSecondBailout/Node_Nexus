@@ -46,6 +46,7 @@ struct s_command_handler {
 int32 help_handle(Client *, char *, char *);
 int32 register_handle(Client *, char *, char *);
 int32 login_handle(Client *, char *, char *);
+int32 players_handle(Client *, char *, char *);
 int32 logout_handle(Client *, char *, char *);
 int32 tree_handle(Client *, char *, char *);
 int32 newdir_handle(Client *, char *, char *);
