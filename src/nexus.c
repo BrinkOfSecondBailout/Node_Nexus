@@ -3,6 +3,7 @@
 #include "nexus.h"
 #include "myserver.h"
 #include "base64.h"
+#include "classifier.h"
 
 Node *curr_node = NULL;
 static char global_buf[2048];
@@ -26,6 +27,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"open", open_handle},
 	{ (char *)"save", save_handle},
 	{ (char *)"kill", kill_handle},
+	{ (char *)"classify", classify_handle},
 	{ (char *)"nuke", nuke_handle},
 	{ (char *)"exit", exit_handle }	
 };
@@ -56,7 +58,11 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
                        "  	<dir>: 'curr' or directory name\n"
                        "  	<type>: -s (string), -i (int), -b (binary), -f (file path)\n"
                        "  	<value>: File content (max 1MB) or file path for -f\n"
-                       "  	#Example: addfile curr test.txt -s HelloWorld\n"
+                       "  	#Example: addfile curr diary.txt -s\n"
+		       "		  *Enter string when prompted: *\n"
+		       "		  I am feeling great today! Carpe diem!\n"
+                       "  		  addfile logs friday -i 13\n"
+                       "  		  addfile img titan -f ~/downloads/eren.png\n"
                        "open <file_name>    			Open a file by name\n"
                        "  	#Example: open test.txt\n"
                        "save <file_name>    			Download a binary file\n"
@@ -64,10 +70,13 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
                        "kill -<flag> <name> 			Delete a file or directory\n"
                        "  	<flag>: -d (directory), -f (file)\n"
                        "  	#Example: kill -f test.txt\n"
+                       "  		  kill -d images\n"
                        "exit                			Exit the program\n\n");
 	WRITE_GLOBAL_BUF("Admin Commands (Admin Only):\n"
                        "----------------------------\n"
                        "users             			List all registered users\n"
+		       "classify <filename>			Use AI to gauge sentiment of a text file (beta mode)\n"
+		       "	#Example: classify diary.txt\n"
                        "nuke                			Delete all files and directories\n\n");
     	// Send to client
     	int result = dprintf(cli->s, "%s", global_buf);
@@ -276,60 +285,74 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		}
 	}
 	char name[256] = {0}, flag[8] = {0};
-	char *value = (char *)malloc(MAX_FILE_UPLOAD);
 	Leaf *leaf;
-
 	char *p = strtok(args, " ");
 	strncpy(name, p, sizeof(name) - 1);
 
 	p = strtok(NULL, " ");
 	strncpy(flag, p, sizeof(flag) - 1);
-	p = strtok(NULL, " ");
-	strncpy(value, p, MAX_FILE_UPLOAD - 1);
-	pthread_mutex_lock(&mem_control->mutex);
+	
 	if (!strcmp(flag, "-s")) {
-		leaf = create_new_leaf_string(node, name, value, sizeof(value));		
-	} else if (!strcmp(flag, "-i")) {
-		leaf = create_new_leaf_int(node, name, (int32_t)atoi(value));
-	} else if (!strcmp(flag, "-b")) {
-		size_t decoded_len;
-		unsigned char *decoded = base64_decode(value, strlen(value), &decoded_len);
-		if (!decoded) {
-			dprintf(cli->s, "Base64 decoding failed\n");
+		pthread_mutex_lock(&mem_control->mutex);
+		zero(global_buf, sizeof(global_buf));
+		dprintf(cli->s, "Enter string:\n");
+		ssize_t n = read(cli->s, global_buf, sizeof(global_buf) - 1);
+		if (n <= 0) {
+			dprintf(cli->s, "Error reading response: %s\n", n < 0 ? strerror(errno) : "connection closed");
 			pthread_mutex_unlock(&mem_control->mutex);
 			return 1;
 		}
-		leaf = create_new_leaf_binary(node, name, decoded, decoded_len);
-		free(decoded);
-	} else if (!strcmp(flag, "-f")) {
-		FILE *f = fopen(value, "rb");
-		if (!f) {
-			dprintf(cli->s, "Cannot open file from designated path %s\n", value);
-			pthread_mutex_unlock(&mem_control->mutex);
-			return 1;
-		}
-		fseek(f, 0, SEEK_END);
-		size_t size = ftell(f);
-		fseek(f, 0, SEEK_SET);
-		char *data = malloc(size);
-		fread(data, 1, size, f);
-		fclose(f);
-		
-		leaf = create_new_leaf_binary(node, name, data, size);
-		free(data);
+		size_t size = sizeof(global_buf);
+		leaf = create_new_leaf_string(node, name, global_buf, size);
 	} else {
-		dprintf(cli->s, "Invalid flag, please use -s , -i , -b for string/integer/binary\n");
-		pthread_mutex_unlock(&mem_control->mutex);
-		return 1;
+		pthread_mutex_lock(&mem_control->mutex);
+		char *value = (char *)malloc(MAX_FILE_UPLOAD);
+		p = strtok(NULL, " ");
+		strncpy(value, p, MAX_FILE_UPLOAD - 1);
+		if (!strcmp(flag, "-i")) {
+			leaf = create_new_leaf_int(node, name, (int32_t)atoi(value));
+		} else if (!strcmp(flag, "-b")) {
+			size_t decoded_len;
+			unsigned char *decoded = base64_decode(value, strlen(value), &decoded_len);
+			if (!decoded) {
+				dprintf(cli->s, "Base64 decoding failed\n");
+				pthread_mutex_unlock(&mem_control->mutex);
+				free(value);
+				return 1;
+			}
+			leaf = create_new_leaf_binary(node, name, decoded, decoded_len);
+			free(decoded);
+		} else if (!strcmp(flag, "-f")) {
+			FILE *f = fopen(value, "rb");
+			if (!f) {
+				dprintf(cli->s, "Cannot open file from designated path %s\n", value);
+				pthread_mutex_unlock(&mem_control->mutex);
+				return 1;
+			}
+			fseek(f, 0, SEEK_END);
+			size_t size = ftell(f);
+			fseek(f, 0, SEEK_SET);
+			char *data = malloc(size);
+			fread(data, 1, size, f);
+			fclose(f);
+			leaf = create_new_leaf_binary(node, name, data, size);
+			free(data);
+		} else {
+			dprintf(cli->s, "Invalid flag, please use -s , -i , -b for string/integer/binary\n");
+			pthread_mutex_unlock(&mem_control->mutex);
+			free(value);
+			return 1;
+		}
+		free(value);
 	}
 	if (!leaf) {
 		dprintf(cli->s, "Unable to add file %s.. make sure new file name is unique.. please try again..\n", name);
 		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
+
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
 	pthread_mutex_unlock(&mem_control->mutex);
-	free(value);
 	return 0;	
 }
 
@@ -450,6 +473,24 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 		return 0;
 	}
 	return 1;
+}
+
+int32 classify_handle(Client *cli, char *file_name, char *unused) {
+	pthread_mutex_lock(&mem_control->mutex);
+	Leaf *leaf = find_leaf_by_hash(file_name);
+	if (!leaf || leaf->type != VALUE_STRING) {
+		fprintf(stderr, "Invalid or not a string file\n");
+		pthread_mutex_unlock(&mem_control->mutex);
+		return 1;
+	}
+	SentimentLabel label = classify_text(leaf->value.string);
+	pthread_mutex_unlock(&mem_control->mutex);
+	
+	zero(global_buf, sizeof(global_buf));
+	snprintf(global_buf, sizeof(global_buf), "Sentiment: %s\n", label == POSITIVE ? "POSITIVE" : "NEGATIVE");
+	dprintf(cli->s, "%s\n", global_buf);
+	
+	return 0;	
 }
 
 int32 nuke_handle(Client *cli, char *folder, char *args) {
@@ -709,10 +750,6 @@ int init_root() {
 }
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
-/*
-	verify_database("database.dat");
-	return 0;
-*/
 	if (init_saved_database()) {
 		fprintf(stderr, "Initializing new database\n");
 		if (init_root()) return 1;

@@ -15,6 +15,8 @@
 #include <zlib.h>
 #include <openssl/sha.h>
 #include <pthread.h>
+#include "classifier.h"
+
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"

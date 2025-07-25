@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -g -O2
-LDFLAGS = -lz -lcrypto -pthread
-SOURCES = nexus.c database.c myserver.c base64.c
+LDFLAGS = -lz -lcrypto -pthread -lm
+SOURCES = nexus.c database.c myserver.c base64.c classifier.c
 OBJECTS = $(SOURCES:.c=.o)
 EXECUTABLE = nexus
 

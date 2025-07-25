@@ -67,5 +67,6 @@ int32 addfile_handle(Client *, char *, char *);
 int32 open_handle(Client *, char *, char *);
 int32 save_handle(Client *, char *, char *);
 int32 kill_handle(Client *, char *, char *);
+int32 classify_handle(Client *, char *, char *);
 int32 nuke_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);

@@ -214,15 +214,28 @@ static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
 static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	Leaf *l, *first;
+	const int truncate_limit = 50;
 	if (!n) return;
 	if (n->leaf) {
 		first = find_first_leaf(n);
 		for (l = first; l; l = l->sibling) {
+			zero(buf, sizeof(buf));
 			switch (l->type) {
 				case VALUE_STRING:
-					snprintf(buf, sizeof(buf), "%s%s/..%s -> '%s'\n",
-						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.string);
-					break;
+					
+					size_t len = strlen(l->value.string);
+					if (len <= truncate_limit) {
+						snprintf(buf, sizeof(buf), "%s%s/..%s -> '%s'\n",
+							indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.string);
+						break;
+					} else {
+						char truncated[truncate_limit + 1];
+						strncpy(truncated, l->value.string, truncate_limit);
+						truncated[truncate_limit] = '\0';
+						snprintf(buf, sizeof(buf), "%s%s/..%s -> '%s...'\n",
+							indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, truncated);
+						break;
+					}
 				case VALUE_INT:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> %d\n",
 						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.integer);

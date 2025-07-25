@@ -48,7 +48,7 @@ sudo apt install build-essential libz-dev libssl-dev
 
 2. Compile the server:
    ```bash
-   gcc -o nexus nexus.c database.c myserver.c -lz -lcrypto
+   gcc -o nexus nexus.c database.c myserver.c classifier.c -lz -pthread -lcrypto -lm
    ```
 
 3. Set the admin password environment variable:
@@ -88,7 +88,7 @@ Run `help` to see all commands with examples. Key commands include:
   - `logout`: Log out.
   - `tree`: Display all directories and files.
   - `newdir <name>`: Create a directory (e.g., `newdir my_folder`).
-  - `addfile <dir> <file> <type> <value>`: Add a file (e.g., `addfile curr test.txt -s HelloWorld`).
+  - `addfile <dir> <file> <type> <value>`: Add a file (e.g., `addfile curr wonderland -f alice.png`).
   - `open <file_name>`: View a file (e.g., `open test.txt`).
   - `save <file_name>`: Download a binary file (e.g., `save data.bin`).
   - `kill -<flag> <name>`: Delete a file (`-f`) or directory (`-d`) (e.g., `kill -f test.txt`).
@@ -105,7 +105,8 @@ telnet localhost 8080
 register alice password123
 login alice password123
 newdir documents
-addfile documents note.txt -s "Hello, Node Nexus!"
+addfile documents note.txt -s 
+"Hello, Node Nexus!"
 tree
 open note.txt
 logout
