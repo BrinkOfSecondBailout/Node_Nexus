@@ -63,7 +63,7 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
 		       "		  I am feeling great today! Carpe diem!\n"
                        "  		  addfile logs friday -i 13\n"
                        "  		  addfile img titan -f ~/downloads/eren.png\n"
-                       "open <file_name>    			Open a file by name\n"
+                       "open <name>    				Open a folder or file by name\n"
                        "  	#Example: open test.txt\n"
                        "save <file_name>    			Download a binary file\n"
                        "  	#Example: save data.bin\n"
@@ -358,13 +358,20 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 
 int32 open_handle(Client *cli, char *key, char *args) {
 	Leaf *leaf;
+	Node *node;
 	if (strlen(key) < 1 || strlen(key) >= MAX_KEY_LEN || strstr(key, "/") || strstr(key, "..")) {
-		dprintf(cli->s, "Invalid file name, must be non-empty < %d chars, no '/' or '..'\n", MAX_KEY_LEN);
+		dprintf(cli->s, "Invalid name, must be non-empty < %d chars, no '/' or '..'\n", MAX_KEY_LEN);
 		return 1;
 	}
+	node = find_node_by_hash(key);
+	if (node) {
+		print_node(cli->s, node);
+		return 0;
+	}
+
 	leaf = find_leaf_by_hash(key);
 	if (!leaf) {
-		dprintf(cli->s, "Unable to find file by name '%s'\n", key);
+		dprintf(cli->s, "Unable to find folder or file by name '%s'\n", key);
 		return 1;
 	}
 	print_leaf(cli->s, leaf);
@@ -743,7 +750,7 @@ int init_root() {
 		return 1;
 	}
 	create_admin_user();
-	curr_node = root;
+	// curr_node = root;
 	// fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
 	mem_control->dirty = 0;
 	return 0;
@@ -754,6 +761,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Initializing new database\n");
 		if (init_root()) return 1;
 	}
+	curr_node = root;
 	atexit(base64_cleanup);
 	atexit(cleanup_database);
 	char *str_port;

@@ -76,14 +76,14 @@ typedef unsigned char int8;
 typedef enum {
 	VALUE_STRING,
 	VALUE_INT,
-	VALUE_DOUBLE,
+	//VALUE_DOUBLE,
 	VALUE_BINARY
 } ValueType;
 
 typedef union {
 	char *string;
 	int32_t integer;
-	double floating;
+	//double floating;
 	struct {
 		void *data;
 		size_t size;
@@ -164,7 +164,7 @@ Leaf *find_leaf_by_hash(char *);
 // Leaf *create_new_leaf_prototype(Node *, char *);
 Leaf *create_new_leaf_string(Node *, char *, char *, size_t);
 Leaf *create_new_leaf_int(Node *, char *, int32_t);
-Leaf *create_new_leaf_double(Node *, char *, double);
+// Leaf *create_new_leaf_double(Node *, char *, double);
 Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
 User *create_new_user(const char *, const char *);
 User *find_user(const char *);
@@ -173,7 +173,7 @@ int mark_user_logged_out(const char *);
 int verify_user(const char *, const char *);
 Node *find_node_linear(Node *, char *);
 Leaf *find_leaf_linear(Node *, char *);
-void print_node(Node *);
+void print_node(int, Node *);
 void print_leaf(int, Leaf *);
 int delete_node(Node *);
 int delete_leaf(char *);

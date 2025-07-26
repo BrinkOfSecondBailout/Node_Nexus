@@ -240,10 +240,10 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> %d\n",
 						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.integer);
 					break;
-				case VALUE_DOUBLE:
+			/*	case VALUE_DOUBLE:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> %.2f\n",
 						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.floating);
-					break;
+					break; */
 				case VALUE_BINARY:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> [binary data, size = %ld]\n",
 						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.binary.size);
@@ -476,7 +476,7 @@ Leaf *create_new_leaf_int(Node *parent, char *key, int32_t value) {
 	add_leaf_to_table(new);
 	return new;
 }
-
+/*
 Leaf *create_new_leaf_double(Node *parent, char *key, double value) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
@@ -488,7 +488,7 @@ Leaf *create_new_leaf_double(Node *parent, char *key, double value) {
 	new->value.floating = value;
 	add_leaf_to_table(new);
 	return new;
-}
+} */
 
 Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	Leaf *new;
@@ -600,18 +600,49 @@ int verify_user(const char *username, const char *password) {
 }
 
 
-void print_node(Node *n) {
-	if (!n) {
-		printf("Invalid directory\n");
-	} else {
-		printf("**FOLDER**\n");
-		printf("Folder path: %s\n", n->path);
-		if (n->child)
-			printf("Folder has files inside\n");
-		else
-			printf("Folder is empty\n");
-		printf("\n");
+void print_node(int cli_fd, Node *node) {
+	if (!node) {
+		dprintf(cli_fd, "Invalid folder\n");
+		fprintf(stderr, "Invalid folder\n");
+		return;
 	}
+	char header[512];
+	snprintf(header, sizeof(header), "\n== FOLDER ==\n\nPath: %s\nName: %s\nContent:\n", node->path, node->key);
+	Node *stack[256];
+	Node *used_stack[256];
+	int used_stack_count = 0;
+	int stack_top = -1;
+	int8 indentations[256];	
+	stack[++stack_top] = node;
+	used_stack[used_stack_count++] = node;
+	
+	indentations[stack_top] = 0;
+		
+	while (stack_top >= 0) {
+		Node *n = stack[stack_top];
+		int8 indentation = indentations[stack_top--];
+		print_node_and_leaves(n, indentation, cli_fd);
+
+		Node *sibling = n->sibling;
+		while (sibling) {
+			if (!is_node_in_stack(sibling, used_stack, used_stack_count)) {
+				stack[++stack_top] = sibling;
+				used_stack[used_stack_count++] = sibling;
+				indentations[stack_top] = indentation;
+			}
+			sibling = sibling->sibling;
+		}
+
+		if (n->child) {
+			if (!is_node_in_stack(n->child, used_stack, used_stack_count)) {
+				stack[++stack_top] = n->child;
+				used_stack[used_stack_count++] = n->child;
+			}
+			indentations[stack_top] = indentation + 1;
+		}
+	}
+	write_str(cli_fd, "\n");
+
 	return;
 }
 
@@ -623,17 +654,17 @@ void print_leaf(int cli_fd, Leaf *l) {
 		fprintf(stderr, "Invalid file\n");
 		return;
 	}
-	snprintf(header, sizeof(header), "**FILE**\n%s\n%s\n", l->parent->path, l->key);
+	snprintf(header, sizeof(header), "\n== FILE ==\n\nPath: %s\nName: %s\nContent:\n", l->parent->path, l->key);
 	switch(l->type) {
 		case VALUE_STRING:
-			snprintf(body, sizeof(body), "'%s'\n", l->value.string);
+			snprintf(body, sizeof(body), "%s\n", l->value.string);
 			break;
 		case VALUE_INT:
 			snprintf(body, sizeof(body), "%d\n", l->value.integer);
 			break;
-		case VALUE_DOUBLE:
+	/*	case VALUE_DOUBLE:
 			snprintf(body, sizeof(body), "%.2f\n", l->value.floating);
-			break;
+			break; */
 		case VALUE_BINARY:
 			if (l->value.binary.compressed) {
 				// Decompress for display
@@ -872,12 +903,12 @@ int serialize_node(FILE *f, Node *node) {
 					return 1;
 				}
 				break;
-			case VALUE_DOUBLE:
+		/*	case VALUE_DOUBLE:
 				if (fwrite(&l->value.floating, sizeof(double), 1, f) != 1) {
 					fprintf(stderr, "serialize_node() fwrite double failed\n");
 					return 1;
 				}
-				break;
+				break; */
 			case VALUE_BINARY:
 				if (fwrite(&l->value.binary.size, sizeof(size_t), 1, f) != 1
 					|| fwrite(l->value.binary.data, l->value.binary.size, 1, f) != 1
@@ -1002,12 +1033,12 @@ Node *deserialize_node(FILE *f, Node *parent) {
                     			return NULL;
                 		}
                 		break;
-            		case VALUE_DOUBLE:
+            	/*	case VALUE_DOUBLE:
                 		if (fread(&leaf->value.floating, sizeof(double), 1, f) != 1) {
                     			fprintf(stderr, "deserialize_node: fread double failed\n");
                     			return NULL;
                 		}
-                		break;
+                		break; */
             		case VALUE_BINARY:
                 		if (fread(&leaf->value.binary.size, sizeof(size_t), 1, f) != 1) {
                     			fprintf(stderr, "deserialize_node: fread binary size failed\n");
@@ -1062,15 +1093,6 @@ int deserialize_database(const char *filename) {
 			return 1;	
 		}
 	}
-
-	/* if (fread(&mem_control->node_count, sizeof(int), 1, f) != 1) {
-		fclose(f);
-		pthread_mutex_unlock(&mem_control->mutex);
-		fprintf(stderr, "load_database() fread nodecount failure\n");
-		return 1;
-	}
-	fprintf(stderr, "Success read number of nodes: %ld\n", mem_control->node_count);
-	*/
 	root = deserialize_node(f, NULL);
 	if (!root) {
 		fprintf(stderr, "deserialize_database: deserialize_node failed\n");
@@ -1197,7 +1219,7 @@ void verify_database(const char *filename) {
                         printf("INT, value=%d\n", value);
                     }
                     break;
-                case VALUE_DOUBLE:
+              /*  case VALUE_DOUBLE:
                     {
                         double value;
                         if (fread(&value, sizeof(double), 1, f) != 1) {
@@ -1207,7 +1229,7 @@ void verify_database(const char *filename) {
                         }
                         printf("DOUBLE, value=%.2f\n", value);
                     }
-                    break;
+                    break; */
                 case VALUE_BINARY:
                     {
                         size_t size;
