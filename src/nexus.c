@@ -576,13 +576,15 @@ int32 exit_handle(Client *cli, char *folder, char *args) {
 }
 
 void log_all_users_out() {
+	printf("Total users: %ld\n", mem_control->client_count);
 	for (size_t i = 0; i < mem_control->client_count; i++) {
-		printf("Total users: %ld\n", mem_control->client_count);
-		printf("Logging out: %s\n", mem_control->clients[i]->username);
-		mem_control->clients[i]->logged_in = 0;
-		mark_user_logged_out(mem_control->clients[i]->username);	
+		if (mem_control->clients[i]) {
+			printf("Logging out: %s\n", mem_control->clients[i]->username);
+			mem_control->clients[i]->logged_in = 0;
+			mark_user_logged_out(mem_control->clients[i]->username);
+			mem_control->clients[i] = NULL;
+		}
 	}
-	return;
 }
 
 Callback get_command(int8 *cmd_name) {
