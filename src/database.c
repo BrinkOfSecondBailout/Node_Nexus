@@ -1033,12 +1033,6 @@ Node *deserialize_node(FILE *f, Node *parent) {
                     			return NULL;
                 		}
                 		break;
-            	/*	case VALUE_DOUBLE:
-                		if (fread(&leaf->value.floating, sizeof(double), 1, f) != 1) {
-                    			fprintf(stderr, "deserialize_node: fread double failed\n");
-                    			return NULL;
-                		}
-                		break; */
             		case VALUE_BINARY:
                 		if (fread(&leaf->value.binary.size, sizeof(size_t), 1, f) != 1) {
                     			fprintf(stderr, "deserialize_node: fread binary size failed\n");
@@ -1128,7 +1122,7 @@ void verify_database(const char *filename) {
 		    fclose(f);
 		    return;
 		}
-		printf("User %zu: username=%s, logged_in=%d\n", i, user.username, user.logged_in);
+		printf("User %zu: username=%s, logged_in=%ld\n", i, user.username, user.logged_in);
 		printf("Password hash: ");
 		for (int j = 0; j < SHA256_DIGEST_LENGTH; j++) {
 		    printf("%02x", user.password_hash[j]);

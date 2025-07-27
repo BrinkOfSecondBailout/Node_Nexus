@@ -610,9 +610,8 @@ void zero_multiple(void *buf,...) {
 }
 
 void child_loop(Client *cli) {
-	print_all_cli();
 	char buf[256] = {0};
-//	fprintf(stderr, "child_loop: Client %d, root=%p\n", getpid(), (void*)root);
+	fprintf(stderr, "child_loop: Client %d\n", getpid());
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
@@ -654,7 +653,15 @@ void child_loop(Client *cli) {
 		cb(cli, folder, args);
 	}
 	mem_control->active_connections--;
-//	logout_handle(cli, "", "");
+	fprintf(stderr, "Client %s exited\n", cli->username);
+	cli->logged_in = 0;
+	fprintf(stderr, "Client %s logged_in = %ld\n", cli->username, cli->logged_in);
+	for (size_t i = 0; i < mem_control->client_count; i++) {
+		if (mem_control->clients[i] == cli) {
+			mem_control->clients[i] = NULL;
+			mem_control->client_count--;
+		}
+	}	
 }
 
 Client *build_client_struct() {

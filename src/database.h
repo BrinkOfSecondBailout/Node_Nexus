@@ -124,7 +124,7 @@ struct s_leaf_hash_entry {
 struct s_user {
 	char username[MAX_USERNAME_LEN];
 	unsigned char password_hash[SHA256_DIGEST_LENGTH]; //32bytes
-	int logged_in;
+	size_t logged_in;
 };
 
 typedef struct SharedMemControl {
