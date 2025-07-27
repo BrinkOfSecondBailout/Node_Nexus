@@ -16,7 +16,7 @@
 #include <openssl/sha.h>
 #include <pthread.h>
 #include "classifier.h"
-
+#include "nexus.h"
 
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -128,6 +128,7 @@ struct s_user {
 };
 
 typedef struct SharedMemControl {
+	size_t active_connections;
 	void *shared_mem_pool;
 	size_t shared_mem_size;
 	size_t shared_mem_used;
@@ -137,6 +138,8 @@ typedef struct SharedMemControl {
 	size_t leaf_count;
 	User *users[MAX_USERS];
 	size_t user_count;
+	Client *clients[MAX_CONNECTION];
+	size_t client_count;
 	pthread_mutex_t mutex;
 	int dirty;
 } SharedMemControl;
@@ -159,6 +162,7 @@ Node *create_new_node(Node *, char *);
 // Leaf *find_first_leaf(Node *);
 // Leaf *find_last_leaf_linear(Node *);
 // void add_leaf_to_table(Leaf *);
+void add_node_to_table(Node *);
 Node *find_node_by_hash(char *);
 Leaf *find_leaf_by_hash(char *);
 // Leaf *create_new_leaf_prototype(Node *, char *);

@@ -310,7 +310,7 @@ void print_tree(int fd, Node *root) {
 	
 }
 
-static void add_node_to_table(Node *node) {
+void add_node_to_table(Node *node) {
 	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
 	NodeHashEntry *entry = alloc_shared(sizeof(NodeHashEntry));
 	if (!entry) {
@@ -555,7 +555,6 @@ User *find_user(const char *username) {
 			return mem_control->users[i];
 		}
 	}
-	// fprintf(stderr, "User not found\n");
 	return NULL;
 }
 
@@ -607,7 +606,8 @@ void print_node(int cli_fd, Node *node) {
 		return;
 	}
 	char header[512];
-	snprintf(header, sizeof(header), "\n== FOLDER ==\n\nPath: %s\nName: %s\nContent:\n", node->path, node->key);
+	snprintf(header, sizeof(header), "\n== FOLDER ==\n\nPath: %s\nName: %s\n", node->path, node->key);
+	dprintf(cli_fd, "%s\n", header);
 	Node *stack[256];
 	Node *used_stack[256];
 	int used_stack_count = 0;
@@ -1100,7 +1100,7 @@ int deserialize_database(const char *filename) {
 		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
-
+	add_node_to_table(root);
 	fprintf(stderr, "Successfully loaded saved database from %s\n", filename);
 	fclose(f);
 	pthread_mutex_unlock(&mem_control->mutex);
@@ -1219,17 +1219,6 @@ void verify_database(const char *filename) {
                         printf("INT, value=%d\n", value);
                     }
                     break;
-              /*  case VALUE_DOUBLE:
-                    {
-                        double value;
-                        if (fread(&value, sizeof(double), 1, f) != 1) {
-                            fprintf(stderr, "verify_database: fread double failed\n");
-                            fclose(f);
-                            return;
-                        }
-                        printf("DOUBLE, value=%.2f\n", value);
-                    }
-                    break; */
                 case VALUE_BINARY:
                     {
                         size_t size;

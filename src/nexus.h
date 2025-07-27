@@ -1,4 +1,7 @@
 /* nexus.h */
+#ifndef NEXUS_H
+#define NEXUS_H
+
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -31,7 +34,7 @@ typedef unsigned char int8;
 
 typedef struct s_command_handler Command_Handler;
 typedef struct s_client Client;
-typedef struct s_client_list ClientList;
+// typedef struct s_client_list ClientList;
 
 typedef int32 (*Callback)(Client *, char *, char *);
 
@@ -39,14 +42,15 @@ struct s_client {
 	int s;
 	char ip[16];
 	int16 port;
-	int logged_in;
+	size_t logged_in;
 	char username[MAX_USERNAME_LEN];
 };
 
+/*
 struct s_client_list {
 	Client *list[MAX_CONNECTION];
 	size_t count;
-};
+};*/
 
 struct s_command_handler {
 	char *cmd_name;
@@ -70,3 +74,5 @@ int32 kill_handle(Client *, char *, char *);
 int32 classify_handle(Client *, char *, char *);
 int32 nuke_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);
+
+#endif

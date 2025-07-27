@@ -8,8 +8,6 @@
 Node *curr_node = NULL;
 static char global_buf[2048];
 volatile int keep_running_child = 1;
-int active_connections = 0;
-ClientList *client_list = NULL;
 
 Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
@@ -31,6 +29,18 @@ Command_Handler c_handlers[] = {
 	{ (char *)"nuke", nuke_handle},
 	{ (char *)"exit", exit_handle }	
 };
+
+void print_cli(Client *client) {
+	printf("Users: %s\n", client->username);
+}
+
+void print_all_cli() {
+	printf("Total users: %ld\n", mem_control->client_count);
+	for (size_t i = 0; i < mem_control->client_count; i++) {
+		print_cli(mem_control->clients[i]);
+	}
+	return;
+}
 
 int32 help_handle(Client *cli, char *unused1, char *unused2) {
 	zero(global_buf, sizeof(global_buf));
@@ -115,6 +125,9 @@ int32 register_handle(Client *cli, char *username, char *args) {
 	cli->logged_in = 1;
 	user->logged_in = 1;
 	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
+	mem_control->clients[mem_control->client_count] = cli;
+	mem_control->client_count++;
+	print_all_cli();
 	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
@@ -138,6 +151,9 @@ int32 login_handle(Client *cli, char *username, char *args) {
 		cli->logged_in = 1;
 		mark_user_logged_in(username);
 		strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
+		mem_control->clients[mem_control->client_count] = cli;
+		mem_control->client_count++;
+		print_all_cli();
 		dprintf(cli->s, "Successfully logged in as '%s'\n", username);
 		return 0;
 	} else if (n == 1) {
@@ -188,6 +204,13 @@ int32 logout_handle(Client *cli, char *username, char *args) {
 		if (!mark_user_logged_out((const char *)cli->username)) {
 			cli->username[0] = '\0';
 			cli->logged_in = 0;
+			for (size_t i = 0; i < mem_control->client_count; i++) {
+				if (mem_control->clients[i] == cli) {
+					mem_control->clients[i] = NULL;
+					mem_control->client_count--;
+					break;
+				}
+			}
 			dprintf(cli->s, "Successfully logged out\n");
 			return 0;
 		} else {
@@ -553,8 +576,11 @@ int32 exit_handle(Client *cli, char *folder, char *args) {
 }
 
 void log_all_users_out() {
-	for (size_t i = 0; i < client_list->count; i++) {
-		logout_handle(client_list->list[i], "", "");		
+	for (size_t i = 0; i < mem_control->client_count; i++) {
+		printf("Total users: %ld\n", mem_control->client_count);
+		printf("Logging out: %s\n", mem_control->clients[i]->username);
+		mem_control->clients[i]->logged_in = 0;
+		mark_user_logged_out(mem_control->clients[i]->username);	
 	}
 	return;
 }
@@ -584,6 +610,7 @@ void zero_multiple(void *buf,...) {
 }
 
 void child_loop(Client *cli) {
+	print_all_cli();
 	char buf[256] = {0};
 //	fprintf(stderr, "child_loop: Client %d, root=%p\n", getpid(), (void*)root);
 	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
@@ -626,7 +653,8 @@ void child_loop(Client *cli) {
 		}
 		cb(cli, folder, args);
 	}
-	logout_handle(cli, "", "");
+	mem_control->active_connections--;
+//	logout_handle(cli, "", "");
 }
 
 Client *build_client_struct() {
@@ -645,7 +673,7 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	char *cli_ip;
 	int16 cli_port;
 
-	if (active_connections >= MAX_CONNECTIONS) {
+	if (mem_control->active_connections >= MAX_CONNECTIONS) {
                 fprintf(stderr, "Too many connections\n");
                 keep_running = 0;
 		return 1;
@@ -662,7 +690,7 @@ int cli_accept_cli(Client *client, int serv_fd) {
                 keep_running = 0;
 		return 1;
         }
-        active_connections++;
+        mem_control->active_connections++;
 	
 	cli_port = (int16)htons((int)cli_addr.sin_port);
 	cli_ip = inet_ntoa(cli_addr.sin_addr);
@@ -672,20 +700,12 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	client->port = cli_port;
 	strncpy(client->ip, cli_ip, 15);
 	
-	client_list->list[client_list->count++] = client;
-
         return cli_fd;
 }
 
-int start_cli_app(int serv_fd) {
+int start_nexus_app(int serv_fd) {
 	int cli_fd;
 	Client *client;
-	client_list = (ClientList*)malloc(sizeof(ClientList));
-	if (!client_list) {
-		fprintf(stderr, "Error Clients malloc()\n");
-		return 1;
-	}
-	client_list->count = 0;
 	while (keep_running) {
 		client = build_client_struct();
 		if (!client) continue;
@@ -695,7 +715,7 @@ int start_cli_app(int serv_fd) {
 			fprintf(stderr, "start_cli_app() failure\n");
 			continue;
 		}
-		printf("Incoming connection (%d/%d)\n", active_connections, MAX_CONNECTIONS);
+		printf("Incoming connection (%ld/%d)\n", mem_control->active_connections, MAX_CONNECTIONS);
 
 		if (!fork()) {
 			close(serv_fd);
@@ -710,7 +730,6 @@ int start_cli_app(int serv_fd) {
 		free(client);
 		close(cli_fd);
 	}
-	log_all_users_out();
 	return 0;
 }
 
@@ -720,11 +739,16 @@ int init_mem_control() {
 		fprintf(stderr, "mmap failed for mem_control: %s\n", strerror(errno));
 		return 1;
 	}	
+	mem_control->active_connections = 0;
 	mem_control->shared_mem_pool = NULL;
 	mem_control->shared_mem_size = 0;
 	mem_control->shared_mem_used = 0;
+	node_hash_table_init();
+	leaf_hash_table_init();
 	mem_control->user_count = 0;
 	zero((void *)mem_control->users, sizeof(mem_control->users));
+	mem_control->client_count = 0;
+	zero((void *)mem_control->clients, sizeof(mem_control->clients));
 	mem_control->dirty = 0;
 
 	pthread_mutexattr_t attr;
@@ -736,8 +760,6 @@ int init_mem_control() {
 		return 1;
 	}
 	pthread_mutexattr_destroy(&attr);
-	node_hash_table_init();
-	leaf_hash_table_init();
 	return 0;
 }
 int init_root() {
@@ -749,14 +771,15 @@ int init_root() {
 		mem_control = NULL;
 		return 1;
 	}
+	add_node_to_table(root);
 	create_admin_user();
-	// curr_node = root;
 	// fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
 	mem_control->dirty = 0;
 	return 0;
 }
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
+	verify_database("database.dat");
 	if (init_saved_database()) {
 		fprintf(stderr, "Initializing new database\n");
 		if (init_root()) return 1;
@@ -764,6 +787,7 @@ int main(int argc, char *argv[]) {
 	curr_node = root;
 	atexit(base64_cleanup);
 	atexit(cleanup_database);
+	atexit(log_all_users_out);
 	char *str_port;
 	int port;
 	int serv_fd;
@@ -774,7 +798,7 @@ int main(int argc, char *argv[]) {
 	}
 	port = (int)atoi(str_port);
 	serv_fd = start_server(HOST, port);
-	start_cli_app(serv_fd);	
+	start_nexus_app(serv_fd);	
 	close_server(serv_fd);
 	return 0;
 }
