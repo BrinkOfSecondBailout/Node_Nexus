@@ -339,6 +339,7 @@ User *create_admin_user() {
 		if (!admin) {
 			fprintf(stderr, "create_admin_user() failed to create admin user\n");
 		} else {
+			mem_control->user_count--;
 			fprintf(stderr, "Admin user successfully created\n");
 			return admin;
 		}
@@ -946,6 +947,7 @@ void serialize_database(const char *filename) {
 		return;
 	}
 	for (size_t i = 0; i < mem_control->user_count; i++) {
+		if (strcmp(mem_control->users[i]->username, ADMIN_USERNAME) == 0) continue;
 		if (fwrite(mem_control->users[i], sizeof(User), 1, f) != 1) {
 			fprintf(stderr, "save_database() fwrite failure\n");
 			pthread_mutex_unlock(&mem_control->mutex);
@@ -1122,7 +1124,7 @@ void verify_database(const char *filename) {
 		    fclose(f);
 		    return;
 		}
-		printf("User %zu: username=%s, logged_in=%ld\n", i, user.username, user.logged_in);
+		printf("User %zu: username=%s, logged_in=%ld\n", i + 1, user.username, user.logged_in);
 		printf("Password hash: ");
 		for (int j = 0; j < SHA256_DIGEST_LENGTH; j++) {
 		    printf("%02x", user.password_hash[j]);
@@ -1247,7 +1249,7 @@ int init_saved_database(void) {
 }
 
 void cleanup_database(void) {
-	if (mem_control->dirty) {
+	if (mem_control->dirty == 1) {
 		printf("Database change detected, saving...\n");
 		serialize_database("database.dat");
 	} else {

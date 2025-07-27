@@ -13,6 +13,7 @@ static int stored_age = 30;
 
 void sigint_handler(int sig) {
 	(void)sig;
+	fprintf(stderr, "SIGINT signal received\n");
 	keep_running = 0;
 }
 

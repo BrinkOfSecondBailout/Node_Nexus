@@ -65,6 +65,7 @@
 
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
+typedef struct s_client_hash_entry ClientHashEntry;
 typedef struct s_node_hash_entry NodeHashEntry;
 typedef struct s_leaf_hash_entry LeafHashEntry;
 typedef struct s_user User;
@@ -121,6 +122,12 @@ struct s_leaf_hash_entry {
 	struct s_leaf_hash_entry *next;
 };
 
+struct s_client_hash_entry {
+	char key[MAX_KEY_LEN];
+	Client *client;
+	struct s_client_hash_entry *next;
+};
+
 struct s_user {
 	char username[MAX_USERNAME_LEN];
 	unsigned char password_hash[SHA256_DIGEST_LENGTH]; //32bytes
@@ -138,8 +145,8 @@ typedef struct SharedMemControl {
 	size_t leaf_count;
 	User *users[MAX_USERS];
 	size_t user_count;
-	Client *clients[MAX_CONNECTION];
-	size_t client_count;
+	ClientHashEntry *logged_in_clients[MAX_CONNECTION];
+	size_t logged_in_client_count;
 	pthread_mutex_t mutex;
 	int dirty;
 } SharedMemControl;
