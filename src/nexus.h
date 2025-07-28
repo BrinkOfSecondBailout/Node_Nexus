@@ -14,7 +14,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#define MAX_CONNECTION			10
+#define MAX_CONNECTIONS			10
 #define PORT				"8000"
 #define HOST				"127.0.0.1"
 #define MAX_FILE_UPLOAD			1048576 //1MB

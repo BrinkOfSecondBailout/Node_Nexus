@@ -31,24 +31,31 @@ Command_Handler c_handlers[] = {
 };
 
 void print_cli(Client *client) {
-	fprintf(stderr, "Client: %p\n", client);
 	fprintf(stderr, "Client: %s\n", client->username);
 }
 
 void print_all_logged_in_cli() {
+	pthread_mutex_lock(&mem_control->mutex);
 	ClientHashEntry *entry;
+	Client *client;
 	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
-	for (size_t i = 0; i < mem_control->logged_in_client_count; i++) {
+	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
 		entry = mem_control->logged_in_clients[i];
-		while (entry) {
-			print_cli(entry->client);
+		while (entry != NULL) {
+			client = entry->client;
+			print_cli(client);
 			entry = entry->next;
 		}
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
 	return;
 }
 
 int add_logged_in_cli(Client *cli) {
+	if (!cli || !cli->username[0]) {
+		fprintf(stderr, "add_logged_in_cli() Invalid or empty username\n");
+		return 1;
+	}
 	pthread_mutex_lock(&mem_control->mutex);
 	if (mem_control->active_connections >= MAX_CONNECTIONS) {
 		fprintf(stderr, "Maximum client connections breached\n");
@@ -63,10 +70,12 @@ int add_logged_in_cli(Client *cli) {
 		return 1;
 	}
 	strncpy(entry->key, cli->username, MAX_KEY_LEN);
+	entry->key[MAX_KEY_LEN - 1] = '\0';
 	entry->client = cli;
 	entry->next = mem_control->logged_in_clients[index];
 	mem_control->logged_in_clients[index] = entry;
 	mem_control->logged_in_client_count++;
+	fprintf(stderr, "Added logged in client %s\n", cli->username);
 	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;
 }
@@ -186,7 +195,7 @@ int32 register_handle(Client *cli, char *username, char *args) {
 	user->logged_in = 1;
 	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 	add_logged_in_cli(cli);
-	print_all_logged_in_cli();
+//	print_all_logged_in_cli();
 	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
@@ -211,7 +220,7 @@ int32 login_handle(Client *cli, char *username, char *args) {
 		mark_user_logged_in(username);
 		strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 		add_logged_in_cli(cli);
-		print_all_logged_in_cli();
+//		print_all_logged_in_cli();
 		dprintf(cli->s, "Successfully logged in as '%s'\n", username);
 		return 0;
 	} else if (n == 1) {
@@ -261,7 +270,7 @@ int32 logout_handle(Client *cli, char *username, char *args) {
 	if (cli->logged_in == 1) {
 		remove_logged_in_cli(cli);
 		if (!mark_user_logged_out((const char *)cli->username)) {
-		//	cli->username[0] = '\0';
+			cli->username[0] = '\0';
 			cli->logged_in = 0;
 			dprintf(cli->s, "Successfully logged out\n");
 			return 0;
@@ -627,8 +636,8 @@ int32 exit_handle(Client *cli, char *folder, char *args) {
 		mark_user_logged_out(cli->username);
 		remove_logged_in_cli(cli);
 		cli->logged_in = 0;
+		cli->username[0] = '\0';
 	}
-	// cli->username[0] = '\0';
 	return 0;	
 }
 
@@ -671,27 +680,30 @@ void zero_multiple(void *buf,...) {
 }
 
 void child_loop(Client *cli) {
-	char buf[256] = {0};
+	if (!cli || cli->s < 0) {
+		fprintf(stderr, "child_loop: Invalid client or socket (pid=%d)\n", getpid());
+		return;
+	}
+	char buf[256], cmd[256], folder[256], args[256];
 	fprintf(stderr, "child_loop: Client %d\n", getpid());
-	char cmd[256] = {0}, folder[256] = {0}, args[256] = {0};
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
 		ssize_t n = read(cli->s, buf, 255);
 		if (n <= 0) {
+			fprintf(stderr, "400 Read error: %s\n", n < 0 ? strerror(errno) : "connection closed");
 			dprintf(cli->s, "400 Read error: %s\n", n < 0 ? strerror(errno) : "connection closed");
 			break;
 		}
 		buf[n] = '\0';
 		if (strcmp(buf, "quit\n") == 0) break;
-
 		// Parse command
 		char *p = strtok(buf, " \n\r");
 		if (!p) {
-			dprintf(cli->s, "400 Empty command\n");
+			fprintf(stderr, "400 Empty Command from client %s\n", cli->username[0] ? cli->username : "<anonymous>");
+			dprintf(cli->s, "400 Empty Command\n");
 			continue;
 		}
 		strncpy(cmd, p, sizeof(cmd) - 1);
-
 		// Parse folder
 		p = strtok(NULL, " \n\r");
 		if (p) {
@@ -703,23 +715,25 @@ void child_loop(Client *cli) {
 				strncpy(args, p, sizeof(args) - 1);
 			}
 		}
-
 		// dprintf(cli->s, "\ncmd: %s\nfolder: %s\nargs: %s\n", cmd, folder, args);
-		
 		Callback cb = get_command((int8 *)cmd);
 		if (!cb) {
+			fprintf(stderr, "400 Command '%s' not found from client '%s'\n", cmd, cli->username[0] ? cli->username : "<anonymous>");
 			dprintf(cli->s, "400 Command not found: %s\n", cmd);
 			continue;
 		}
 		cb(cli, folder, args);
 	}
+	// Cleanup
+	fprintf(stderr, "Exiting child_loop for pid=%d\n", getpid());
 	if (cli->logged_in == 1) {
-		fprintf(stderr, "Client %s exited\n", cli->username);
 		remove_logged_in_cli(cli);
 		mark_user_logged_out(cli->username);
 		cli->logged_in = 0;
+		cli->username[0] = '\0';
 		fprintf(stderr, "Client logged_in_status = %ld\n", cli->logged_in);
 	}
+	close(cli->s);
 }
 
 Client *build_client_struct() {
@@ -729,7 +743,6 @@ Client *build_client_struct() {
 		return NULL;
 	}
 	client->logged_in = 0;
-	//client->username[0] = '\0';
 	return client;
 }
 

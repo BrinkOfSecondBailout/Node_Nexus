@@ -145,7 +145,7 @@ typedef struct SharedMemControl {
 	size_t leaf_count;
 	User *users[MAX_USERS];
 	size_t user_count;
-	ClientHashEntry *logged_in_clients[MAX_CONNECTION];
+	ClientHashEntry *logged_in_clients[MAX_CONNECTIONS];
 	size_t logged_in_client_count;
 	pthread_mutex_t mutex;
 	int dirty;

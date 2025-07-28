@@ -21,7 +21,7 @@
 
 #pragma GCC diagnostic push
 
-#define MAX_CONNECTIONS 50
+#define MAX_CONNECTIONS 10
 
 #define METHOD_LENGTH 8
 #define URL_LENGTH 128
