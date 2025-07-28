@@ -22,6 +22,7 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic push
 
+#define MAX_CONNECTIONS 10
 #define ADMIN_USERNAME "admin"
 #define MAX_PATH_LEN 256
 #define MAX_KEY_LEN 128
@@ -65,6 +66,7 @@
 
 typedef struct s_node Node;
 typedef struct s_leaf Leaf;
+typedef struct s_client Client;
 typedef struct s_client_hash_entry ClientHashEntry;
 typedef struct s_node_hash_entry NodeHashEntry;
 typedef struct s_leaf_hash_entry LeafHashEntry;
@@ -108,6 +110,14 @@ struct s_leaf {
 	char key[MAX_KEY_LEN];
 	LeafValue value;
 	ValueType type;
+};
+
+struct s_client {
+	int s;
+	char ip[16];
+	int16 port;
+	size_t logged_in;
+	char username[MAX_USERNAME_LEN];
 };
 
 struct s_node_hash_entry {

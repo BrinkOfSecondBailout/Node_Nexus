@@ -13,8 +13,8 @@
 #include <poll.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include "database.h"
 
-#define MAX_CONNECTIONS			10
 #define PORT				"8000"
 #define HOST				"127.0.0.1"
 #define MAX_FILE_UPLOAD			1048576 //1MB
@@ -33,17 +33,17 @@ typedef unsigned short int int16;
 typedef unsigned char int8;
 
 typedef struct s_command_handler Command_Handler;
-typedef struct s_client Client;
+// typedef struct s_client Client;
 
 typedef int32 (*Callback)(Client *, char *, char *);
 
-struct s_client {
+/* struct s_client {
 	int s;
 	char ip[16];
 	int16 port;
 	size_t logged_in;
 	char username[MAX_USERNAME_LEN];
-};
+};*/
 
 struct s_command_handler {
 	char *cmd_name;
@@ -66,6 +66,7 @@ int32 save_handle(Client *, char *, char *);
 int32 kill_handle(Client *, char *, char *);
 int32 classify_handle(Client *, char *, char *);
 int32 nuke_handle(Client *, char *, char *);
+int32 boot_all_handle(Client *, char *, char *);
 int32 exit_handle(Client *, char *, char *);
 
 #endif

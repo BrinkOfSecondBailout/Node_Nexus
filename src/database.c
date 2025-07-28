@@ -339,8 +339,8 @@ User *create_admin_user() {
 		if (!admin) {
 			fprintf(stderr, "create_admin_user() failed to create admin user\n");
 		} else {
-			mem_control->user_count--;
-			fprintf(stderr, "Admin user successfully created\n");
+			// mem_control->user_count--;
+			fprintf(stderr, "Admin user '%s' successfully created\n", admin->username);
 			return admin;
 		}
 	}
@@ -576,6 +576,7 @@ int mark_user_logged_out(const char *username) {
 		return 1;
 	}
 	user->logged_in = 0;
+	fprintf(stderr, "User %s logged out\n", username);
 	return 0;
 }
 
@@ -947,7 +948,7 @@ void serialize_database(const char *filename) {
 		return;
 	}
 	for (size_t i = 0; i < mem_control->user_count; i++) {
-		if (strcmp(mem_control->users[i]->username, ADMIN_USERNAME) == 0) continue;
+	//	if (strcmp(mem_control->users[i]->username, ADMIN_USERNAME) == 0) continue;
 		if (fwrite(mem_control->users[i], sizeof(User), 1, f) != 1) {
 			fprintf(stderr, "save_database() fwrite failure\n");
 			pthread_mutex_unlock(&mem_control->mutex);
@@ -1068,7 +1069,7 @@ int deserialize_database(const char *filename) {
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "rb");
 	if (!f) {
-		// fprintf(stderr, "deserialize_database fopen failed\n");
+		fprintf(stderr, "No existing database or open failed\n");
 		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
@@ -1124,7 +1125,7 @@ void verify_database(const char *filename) {
 		    fclose(f);
 		    return;
 		}
-		printf("User %zu: username=%s, logged_in=%ld\n", i + 1, user.username, user.logged_in);
+		printf("User %zu: username=%s, logged_in=%ld\n", i, user.username, user.logged_in);
 		printf("Password hash: ");
 		for (int j = 0; j < SHA256_DIGEST_LENGTH; j++) {
 		    printf("%02x", user.password_hash[j]);

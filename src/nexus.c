@@ -1,5 +1,5 @@
 /* nexus.c */
-#include "database.h"
+// #include "database.h"
 #include "nexus.h"
 #include "myserver.h"
 #include "base64.h"
@@ -27,6 +27,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"kill", kill_handle},
 	{ (char *)"classify", classify_handle},
 	{ (char *)"nuke", nuke_handle},
+	{ (char *)"boot_all", boot_all_handle},
 	{ (char *)"exit", exit_handle }	
 };
 
@@ -75,7 +76,8 @@ int add_logged_in_cli(Client *cli) {
 	entry->next = mem_control->logged_in_clients[index];
 	mem_control->logged_in_clients[index] = entry;
 	mem_control->logged_in_client_count++;
-	fprintf(stderr, "Added logged in client %s\n", cli->username);
+	// fprintf(stderr, "Added logged in client %s with pointer %p\n", cli->username, cli);
+	// fprintf(stderr, "At bucket %d\n", index);
 	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;
 }
@@ -90,8 +92,6 @@ int remove_logged_in_cli(Client *cli) {
 	ClientHashEntry *entry = mem_control->logged_in_clients[index];
 	ClientHashEntry *prev = NULL;
 	while (entry) {
-	//	printf("Entry->client: %p\n", entry->client);
-	//	printf("Cli: %p\n", cli);
 		if (entry->client == cli) {
 			if (prev) {
 				prev->next = entry->next;
@@ -109,6 +109,26 @@ int remove_logged_in_cli(Client *cli) {
 	pthread_mutex_unlock(&mem_control->mutex);
 	fprintf(stderr, "Client not found in logged in\n");
 	return 1;
+}
+
+int log_all_users_out(int cli_fd) {
+	pthread_mutex_lock(&mem_control->mutex);
+	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
+	dprintf(cli_fd, "Total logged in users: %ld\n", mem_control->logged_in_client_count);
+	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
+		ClientHashEntry *entry = mem_control->logged_in_clients[i];
+		while (entry) {
+			if (strcmp(entry->client->username, ADMIN_USERNAME) == 0) {
+				entry = entry->next;
+				continue;
+			}
+			mark_user_logged_out(entry->client->username);
+			entry->client->logged_in = 0;
+			entry = entry->next;
+		}
+	}
+	pthread_mutex_unlock(&mem_control->mutex);
+	return 0;
 }
 
 int32 help_handle(Client *cli, char *unused1, char *unused2) {
@@ -156,6 +176,7 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
                        "users             			List all registered users\n"
 		       "classify <filename>			Use AI to gauge sentiment of a text file (beta mode)\n"
 		       "	#Example: classify diary.txt\n"
+		       "boot_all				Force log out all current logged in users\n"
                        "nuke                			Delete all files and directories\n\n");
     	// Send to client
     	int result = dprintf(cli->s, "%s", global_buf);
@@ -254,7 +275,7 @@ int32 users_handle(Client *cli, char *unused1, char *unused2) {
 			User *user = mem_control->users[i];
 			if (!user) continue;
 			size_t remaining = sizeof(global_buf) - used;
-			int written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "-online" : "offline");
+			int written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "-- ONLINE --" : "== OFFLINE == ");
 			if (written < 0 || (size_t)written >= remaining) {
 				fprintf(stderr, "players_handle: Buffer overflow prevented\n");
 				break;
@@ -629,6 +650,20 @@ int32 nuke_handle(Client *cli, char *folder, char *args) {
 	return 0;
 }
 
+int32 boot_all_handle(Client *cli, char *unused1, char *unused2) {
+	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
+		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
+		return 1;
+	}
+	if (log_all_users_out(cli->s)) {
+		dprintf(cli->s, "Unsuccessful boot_all attempt, try again\n");
+		fprintf(stderr, "Unsuccessful boot_all attempt\n");
+		return 1;
+	}
+	fprintf(stderr, "All current logged in users booted\n");
+	return 0;
+}
+
 int32 exit_handle(Client *cli, char *folder, char *args) {
 	dprintf(cli->s, "Bye now!\n");
 	keep_running_child = 0;
@@ -639,21 +674,6 @@ int32 exit_handle(Client *cli, char *folder, char *args) {
 		cli->username[0] = '\0';
 	}
 	return 0;	
-}
-
-void log_all_users_out() {
-	pthread_mutex_lock(&mem_control->mutex);
-	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
-	for (size_t i = 0; i < mem_control->logged_in_client_count; i++) {
-		ClientHashEntry *entry = mem_control->logged_in_clients[i];
-		while (entry) {
-			mark_user_logged_out(entry->client->username);
-			entry = entry->next;
-		}
-	}
-	zero((void *)mem_control->logged_in_clients, sizeof(mem_control->logged_in_clients));
-	mem_control->logged_in_client_count = 0;
-	pthread_mutex_unlock(&mem_control->mutex);
 }
 
 Callback get_command(int8 *cmd_name) {
@@ -685,7 +705,7 @@ void child_loop(Client *cli) {
 		return;
 	}
 	char buf[256], cmd[256], folder[256], args[256];
-	fprintf(stderr, "child_loop: Client %d\n", getpid());
+	fprintf(stderr, "child_loop: Client process id=%d\n", getpid());
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
 		ssize_t n = read(cli->s, buf, 255);
@@ -737,11 +757,12 @@ void child_loop(Client *cli) {
 }
 
 Client *build_client_struct() {
-	Client *client = (Client *)malloc(sizeof(Client));
+	Client *client = (Client *)alloc_shared(sizeof(Client));
 	if (!client) {
 		fprintf(stderr, "build_client_struct() malloc failure\n");
 		return NULL;
 	}
+//	fprintf(stderr, "Client struct built at %p\n", client);
 	client->logged_in = 0;
 	return client;
 }
@@ -779,7 +800,6 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	client->s = cli_fd;
 	client->port = cli_port;
 	strncpy(client->ip, cli_ip, 15);
-	
         return cli_fd;
 }
 
@@ -810,7 +830,6 @@ int start_nexus_app(int serv_fd) {
 			pthread_mutex_unlock(&mem_control->mutex);
 			exit(0);
 		}
-		free(client);
 		close(cli_fd);
 	}
 			
