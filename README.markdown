@@ -126,8 +126,8 @@ exit
 - `nexus.h`/`nexus.c`: Handles client commands and interactions.
 - `myserver.h`/`myserver.c`: Manages socket connections and server logic.
 - `base64.h`/`base64.c`: Provides base64 encoding/decoding for binary data.
+- `classifier.h`/`classifier.c`: AI algorithm to gauge text sentiment (beta mode).
 - `database.dat`: Binary file for persistent storage.
-
 ## Design Choices
 
 - **In-Memory Database**: Uses a tree of `Node` and `Leaf` structs in shared memory (`mmap`) for fast access, with a hash table for quick leaf lookups.
