@@ -629,16 +629,13 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 }
 
 int32 classify_handle(Client *cli, char *file_name, char *unused) {
-	pthread_mutex_lock(&mem_control->mutex);
 	Leaf *leaf = find_leaf_by_hash(file_name);
 	if (!leaf || leaf->type != VALUE_STRING) {
-		fprintf(stderr, "Invalid or not a string file\n");
+		dprintf(cli->s, "Invalid or not a string file\n");
 		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
 	SentimentLabel label = classify_text(leaf->value.string);
-	pthread_mutex_unlock(&mem_control->mutex);
-	
 	zero(global_buf, sizeof(global_buf));
 	snprintf(global_buf, sizeof(global_buf), "Sentiment: %s\n", label == POSITIVE ? "POSITIVE" : "NEGATIVE");
 	dprintf(cli->s, "%s\n", global_buf);
@@ -803,7 +800,6 @@ void child_loop(Client *cli) {
 		// dprintf(cli->s, "\ncmd: %s\nfolder: %s\nargs: %s\n", cmd, folder, args);
 		Callback cb = get_command((int8 *)cmd);
 		if (!cb) {
-			fprintf(stderr, "400 Command '%s' not found from client '%s'\n", cmd, cli->username[0] ? cli->username : "<anonymous>");
 			dprintf(cli->s, "400 Command not found: %s\n", cmd);
 			continue;
 		}
@@ -815,8 +811,8 @@ void child_loop(Client *cli) {
 		remove_logged_in_cli(cli);
 		mark_user_logged_out(cli->username);
 		cli->logged_in = 0;
+		fprintf(stderr, "Client %s logged_in_status = %ld\n", cli->username, cli->logged_in);
 		cli->username[0] = '\0';
-		fprintf(stderr, "Client logged_in_status = %ld\n", cli->logged_in);
 	}
 	close(cli->s);
 }
@@ -941,7 +937,6 @@ int init_root() {
 	}
 	add_node_to_table(root);
 	create_admin_user();
-	// fprintf(stderr, "init_root: Root node created at %p, mem_control at %p\n", (void*)root, (void*)mem_control);
 	mem_control->dirty = 0;
 	return 0;
 }

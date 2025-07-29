@@ -42,8 +42,8 @@ sudo apt install build-essential libz-dev libssl-dev
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/node-nexus.git
-   cd node-nexus
+   git clone https://github.com/BrinkOfSecondBailout/node-nexus.git
+   cd node-nexus/src
    ```
 
 2. Compile the server:
@@ -65,7 +65,7 @@ sudo apt install build-essential libz-dev libssl-dev
    ```bash
    ./nexus [port]
    ```
-   Default port is defined in `myserver.c`. Example: `./node_nexus 8000`
+   If not specified, default port is defined in `myserver.c`. Example: `./node_nexus 8080`
 
 ## Usage
 
@@ -85,6 +85,7 @@ Run `help` to see all commands with examples. Key commands include:
 - **General Commands**:
   - `register <user> <pass>`: Create a new account (e.g., `register alice password123`).
   - `login <user> <pass>`: Log in (e.g., `login alice password123`).
+  - `change_pw <user> <pass>`: Change your password (e.g., `change_pw alice password123`).
   - `logout`: Log out.
   - `tree`: Display all directories and files.
   - `newdir <name>`: Create a directory (e.g., `newdir my_folder`).
@@ -95,7 +96,10 @@ Run `help` to see all commands with examples. Key commands include:
   - `exit`: Exit the client.
 
 - **Admin Commands** (requires `admin` login):
-  - `players`: List all users with online/offline status.
+  - `users`: List all users with online/offline status.
+  - `boot <user>`: Force logout user (e.g., `boot alice`).
+  - `boot_all`: Force logout all users.
+  - `classify <file_name>`: Use AI to analyze a text file to guage sentiment (beta mode) (e.g., `classify diary.txt`).
   - `nuke`: Delete all files and directories.
 
 ### Example Session

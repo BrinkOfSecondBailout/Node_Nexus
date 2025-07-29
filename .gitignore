@@ -1,3 +1,5 @@
 *.dat
 *.env
+*.swp
 nexus
+
