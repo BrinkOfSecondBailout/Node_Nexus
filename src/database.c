@@ -1,7 +1,5 @@
 /* database.c */
-
 #include "database.h"
-#include "base64.h"
 
 Node *root = NULL;
 SharedMemControl *mem_control = NULL;
@@ -31,13 +29,17 @@ void zero(void *buf, size_t size) {
 }
 
 void node_hash_table_init() {
+	pthread_mutex_lock(&mem_control->mutex);
 	zero((void*)mem_control->node_hash_table, (size_t)sizeof(mem_control->node_hash_table));
 	mem_control->node_count = 0;
+	pthread_mutex_unlock(&mem_control->mutex);
 }
 
 void leaf_hash_table_init() {
+	pthread_mutex_lock(&mem_control->mutex);
 	zero((void *)mem_control->leaf_hash_table, (size_t)sizeof(mem_control->leaf_hash_table));
 	mem_control->leaf_count = 0;
+	pthread_mutex_unlock(&mem_control->mutex);
 }
 
 char *indent(int8 n) {
@@ -102,16 +104,17 @@ static Leaf *find_last_leaf_linear(Node *parent) {
 }
 
 Leaf *find_leaf_by_hash(char *key) {
-//	printf("Searching for leaf: %s\n", key);
 	uint32_t index = HASH_KEY(key, LEAF_HASH_TABLE_SIZE);
+	pthread_mutex_lock(&mem_control->mutex);
 	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
-//	printf("Entry %p\n", entry);
 	while (entry) {
 		if (!strcmp(entry->key, key)) {
+			pthread_mutex_unlock(&mem_control->mutex);
 			return entry->leaf;
 		}
 		entry = entry->next;
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
 	return NULL;
 }
 
@@ -152,14 +155,16 @@ Node *find_node_and_siblings(Node *node, char *path) {
 
 Node *find_node_by_hash(char *key) {
 	uint32_t index = HASH_KEY(key, NODE_HASH_TABLE_SIZE);
+	pthread_mutex_lock(&mem_control->mutex);
 	NodeHashEntry *entry = mem_control->node_hash_table[index];
 	while (entry) {
-//		printf("Searching for node: %s\n", key);
 		if (!strcmp(entry->key, key)) {
+			pthread_mutex_unlock(&mem_control->mutex);
 			return entry->node;
 		}
 		entry = entry->next;
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
 	return NULL;
 }
 
@@ -202,7 +207,6 @@ static Node *find_last_child_node_linear(Node *parent) {
 static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
 	int i;
 	for (i = 0; i < stack_count && i < 256; i++) {
-
 		if (stack[i] == node) {
 			return 1;
 		}
@@ -219,7 +223,7 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	if (n->leaf) {
 		first = find_first_leaf(n);
 		for (l = first; l; l = l->sibling) {
-			zero(buf, sizeof(buf));
+			zero((void *)buf, sizeof(buf));
 			switch (l->type) {
 				case VALUE_STRING:
 					
@@ -240,10 +244,6 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> %d\n",
 						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.integer);
 					break;
-			/*	case VALUE_DOUBLE:
-					snprintf(buf, sizeof(buf), "%s%s/..%s -> %.2f\n",
-						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.floating);
-					break; */
 				case VALUE_BINARY:
 					snprintf(buf, sizeof(buf), "%s%s/..%s -> [binary data, size = %ld]\n",
 						indent(indentation), (!strcmp(n->path, "/")) ? "" : n->path, l->key, l->value.binary.size);
@@ -258,9 +258,7 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 
 static void print_node_and_leaves(Node *n, int8 indentation, int fd) {
 	if (!n) return;
-
 	print_original_node(n, indentation, fd);
-	
 	print_leaves_of_node(n, indentation, fd);
 
 }
@@ -320,11 +318,11 @@ void add_node_to_table(Node *node) {
 	zero((void*)entry, (size_t)sizeof(NodeHashEntry));
 	strncpy(entry->key, node->key, MAX_KEY_LEN);
 	entry->node = node;
+	pthread_mutex_lock(&mem_control->mutex);
 	entry->next = mem_control->node_hash_table[index];
 	mem_control->node_hash_table[index] = entry;
 	mem_control->node_count++;
-	// printf("New node: %s\n", node->key);
-	// printf("Node count: %ld\n", mem_control->node_count);
+	pthread_mutex_unlock(&mem_control->mutex);
 	return;
 }
 
@@ -363,7 +361,6 @@ Node *create_root_node() {
 }
 
 Node *create_new_node(Node *parent, char *name) {
-	pthread_mutex_lock(&mem_control->mutex);
 	Node *new, *last;
 	size_t size;
 	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
@@ -376,17 +373,14 @@ Node *create_new_node(Node *parent, char *name) {
 	size_t new_len = strlen(name);	
 	if (parent_len + new_len + 2 >= MAX_PATH_LEN) {
 		fprintf(stderr, "Path too long in new node\n");
-		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
-
 	last = find_last_child_node(parent);
 	if (!last) {
 		parent->child = new;
 	} else {
 		last->sibling = new;
 	}
-
 	new->parent = parent;
 	new->sibling = NULL;
 	new->child = NULL;
@@ -398,7 +392,6 @@ Node *create_new_node(Node *parent, char *name) {
 	printf("New node path: %s\n", new->path);	
 	add_node_to_table(new);
 	mem_control->dirty = 1;
-	pthread_mutex_unlock(&mem_control->mutex);
 	return new;
 }
 
@@ -412,10 +405,11 @@ static void add_leaf_to_table(Leaf *leaf) {
 	zero((void *)entry, (size_t)sizeof(LeafHashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
+	pthread_mutex_lock(&mem_control->mutex);
 	entry->next = mem_control->leaf_hash_table[index];
 	mem_control->leaf_hash_table[index] = entry;
 	mem_control->leaf_count++;
-//	printf("Leaf count: %ld\n", mem_control->leaf_count);
+	pthread_mutex_unlock(&mem_control->mutex);
 	return;
 }
 
@@ -448,7 +442,6 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	return new;
 }
 
-
 Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);	
@@ -477,19 +470,6 @@ Leaf *create_new_leaf_int(Node *parent, char *key, int32_t value) {
 	add_leaf_to_table(new);
 	return new;
 }
-/*
-Leaf *create_new_leaf_double(Node *parent, char *key, double value) {
-	Leaf *new;
-	new = create_new_leaf_prototype(parent, key);
-	if (!new) {
-		return NULL;
-	}
-
-	new->type = VALUE_DOUBLE;
-	new->value.floating = value;
-	add_leaf_to_table(new);
-	return new;
-} */
 
 Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	Leaf *new;
@@ -521,6 +501,11 @@ User *create_new_user(const char *username, const char *password) {
 		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
+	if (strlen(password) >= MAX_PASSWORD_LEN || strlen(password) < 1) {
+		fprintf(stderr, "create_new_user: Invalid password length\n");
+		pthread_mutex_unlock(&mem_control->mutex);
+		return NULL;
+	}
 	if (mem_control->user_count >= MAX_USERS) {
 		fprintf(stderr, "create_new_user: User limit reached\n");
 		pthread_mutex_unlock(&mem_control->mutex);
@@ -540,7 +525,7 @@ User *create_new_user(const char *username, const char *password) {
 		pthread_mutex_unlock(&mem_control->mutex);
 		return NULL;
 	}
-	zero(user, sizeof(User));
+	zero((void *)user, sizeof(User));
 	strncpy(user->username, username, MAX_USERNAME_LEN - 1);
 	SHA256((const unsigned char *)password, strlen(password), user->password_hash);
 	mem_control->users[mem_control->user_count++] = user;
@@ -551,12 +536,28 @@ User *create_new_user(const char *username, const char *password) {
 }
 
 User *find_user(const char *username) {
+	pthread_mutex_lock(&mem_control->mutex);
 	for (size_t i = 0; i < mem_control->user_count; i++) {
 		if (strcmp(mem_control->users[i]->username, username) == 0) {
+			pthread_mutex_unlock(&mem_control->mutex);
 			return mem_control->users[i];
 		}
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
 	return NULL;
+}
+
+int change_user_password(User *user, const char *password) {
+	if (!user || !password | (strlen(password) < 1) || strlen(password) >= MAX_PASSWORD_LEN) {
+		fprintf(stderr, "change_user_password: Invalid user or password len\n");
+		return 1;
+	}
+	pthread_mutex_lock(&mem_control->mutex);
+	zero((void *)user->password_hash, sizeof(user->password_hash));
+	SHA256((const unsigned char *)password, strlen(password), user->password_hash);
+	mem_control->dirty = 1;
+	pthread_mutex_unlock(&mem_control->mutex);
+	return 0;
 }
 
 int mark_user_logged_in(const char *username) {
@@ -565,7 +566,9 @@ int mark_user_logged_in(const char *username) {
 		fprintf(stderr, "Invalid user\n");
 		return 1;
 	}
+	pthread_mutex_lock(&mem_control->mutex);
 	user->logged_in = 1;
+	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;
 }
 
@@ -575,8 +578,10 @@ int mark_user_logged_out(const char *username) {
 		fprintf(stderr, "Invalid user\n");
 		return 1;
 	}
+	pthread_mutex_lock(&mem_control->mutex);
 	user->logged_in = 0;
 	fprintf(stderr, "User %s logged out\n", username);
+	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;
 }
 
@@ -588,14 +593,18 @@ int verify_user(const char *username, const char *password) {
 	}
 	unsigned char hash[SHA256_DIGEST_LENGTH];
 	SHA256((const unsigned char *)password, strlen(password), hash);
+	pthread_mutex_lock(&mem_control->mutex);
 	if (memcmp(hash, user->password_hash, SHA256_DIGEST_LENGTH) == 0) {
 		if (user->logged_in) {
 			fprintf(stderr, "User %s already logged in\n", username);
+			pthread_mutex_unlock(&mem_control->mutex);
 			return 3;
 		}
+		pthread_mutex_unlock(&mem_control->mutex);
 		fprintf(stderr, "User %s found and verified\n", username);
 		return 0;
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
 	fprintf(stderr, "Verify_user: Password mismatch\n");
 	return 2;
 }
@@ -664,9 +673,6 @@ void print_leaf(int cli_fd, Leaf *l) {
 		case VALUE_INT:
 			snprintf(body, sizeof(body), "%d\n", l->value.integer);
 			break;
-	/*	case VALUE_DOUBLE:
-			snprintf(body, sizeof(body), "%.2f\n", l->value.floating);
-			break; */
 		case VALUE_BINARY:
 			if (l->value.binary.compressed) {
 				// Decompress for display
@@ -801,11 +807,13 @@ void reset_database() {
 	mem_control->shared_mem_used = 0;
 	mem_control->dirty = 1;
 	pthread_mutex_unlock(&mem_control->mutex);
+	return;
 }
 
 void free_leaf(Leaf *leaf) {
 	if (!leaf) return;
 	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
+	pthread_mutex_lock(&mem_control->mutex);
 	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
 	LeafHashEntry *prev = NULL;
 	while (entry) {
@@ -821,11 +829,14 @@ void free_leaf(Leaf *leaf) {
 		prev = entry;
 		entry = entry->next;
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
+	return;
 }
 
 void free_node(Node *node) {
 	if (!node) return;
 	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
+	pthread_mutex_lock(&mem_control->mutex);
 	NodeHashEntry *entry = mem_control->node_hash_table[index];
 	NodeHashEntry *prev = NULL;
 	while (entry) {
@@ -850,6 +861,8 @@ void free_node(Node *node) {
 	if (node->child) {
 		free_node(node->child);
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
+	return;
 }
 
 int serialize_node(FILE *f, Node *node) {
@@ -905,12 +918,6 @@ int serialize_node(FILE *f, Node *node) {
 					return 1;
 				}
 				break;
-		/*	case VALUE_DOUBLE:
-				if (fwrite(&l->value.floating, sizeof(double), 1, f) != 1) {
-					fprintf(stderr, "serialize_node() fwrite double failed\n");
-					return 1;
-				}
-				break; */
 			case VALUE_BINARY:
 				if (fwrite(&l->value.binary.size, sizeof(size_t), 1, f) != 1
 					|| fwrite(l->value.binary.data, l->value.binary.size, 1, f) != 1
@@ -982,7 +989,7 @@ Node *deserialize_node(FILE *f, Node *parent) {
 		fprintf(stderr, "deserialize_node() alloc shared failed\n");
 		return NULL;
 	}
-	zero(node, sizeof(Node));
+	zero((void *)node, sizeof(Node));
 	node->parent = parent;
 	size_t path_len;
 	if (fread(&path_len, sizeof(size_t), 1, f) != 1 
@@ -1007,7 +1014,7 @@ Node *deserialize_node(FILE *f, Node *parent) {
 			fprintf(stderr, "deserialize_node() alloc shared leaf failed\n");
 			return NULL;
 		}
-		zero(leaf, sizeof(Leaf));
+		zero((void *)leaf, sizeof(Leaf));
 		leaf->parent = node;
 		size_t leaf_key_len;
 		if (fread(&leaf_key_len, sizeof(size_t), 1, f) != 1 
@@ -1090,17 +1097,16 @@ int deserialize_database(const char *filename) {
 			return 1;	
 		}
 	}
+	pthread_mutex_unlock(&mem_control->mutex);
 	root = deserialize_node(f, NULL);
 	if (!root) {
 		fprintf(stderr, "deserialize_database: deserialize_node failed\n");
 		fclose(f);
-		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
 	add_node_to_table(root);
 	fprintf(stderr, "Successfully loaded saved database from %s\n", filename);
 	fclose(f);
-	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;
 
 }

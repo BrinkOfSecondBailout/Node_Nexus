@@ -1,9 +1,5 @@
 /* nexus.c */
-// #include "database.h"
 #include "nexus.h"
-#include "myserver.h"
-#include "base64.h"
-#include "classifier.h"
 
 Node *curr_node = NULL;
 static char global_buf[2048];
@@ -13,6 +9,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"help", help_handle },
 	{ (char *)"register", register_handle },
 	{ (char *)"login", login_handle },
+	{ (char *)"change_pw", change_pw_handle },
 	{ (char *)"users", users_handle},
 	{ (char *)"logout", logout_handle },
 	{ (char *)"tree", tree_handle },
@@ -27,6 +24,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"kill", kill_handle},
 	{ (char *)"classify", classify_handle},
 	{ (char *)"nuke", nuke_handle},
+	{ (char *)"boot", boot_handle},
 	{ (char *)"boot_all", boot_all_handle},
 	{ (char *)"exit", exit_handle }	
 };
@@ -76,8 +74,6 @@ int add_logged_in_cli(Client *cli) {
 	entry->next = mem_control->logged_in_clients[index];
 	mem_control->logged_in_clients[index] = entry;
 	mem_control->logged_in_client_count++;
-	// fprintf(stderr, "Added logged in client %s with pointer %p\n", cli->username, cli);
-	// fprintf(stderr, "At bucket %d\n", index);
 	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;
 }
@@ -140,10 +136,13 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
         WRITE_GLOBAL_BUF("General Commands:\n"
                        "-----------------\n"
 		       "help                			List all available commands\n"
-                       "register <user> <pass>  		Create a new account\n"
+                       "register <username> <pw>  		Create a new account\n"
                        "  	#Example: register alice password123\n"
                        "login <user> <pass>    			Log in to an account\n"
                        "  	#Example: login alice password123\n"
+                       "change_pw <username> <pw>              	Change password for one user\n"
+                       "  	#Example: change_pw alice password123\n"
+		       "		  (when prompted) password234\n"
                        "logout              			Log out of current account\n"
                        "tree                			Display all directories and files\n"
                        "newdir <name>       			Create a new directory\n"
@@ -176,7 +175,9 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
                        "users             			List all registered users\n"
 		       "classify <filename>			Use AI to gauge sentiment of a text file (beta mode)\n"
 		       "	#Example: classify diary.txt\n"
-		       "boot_all				Force log out all current logged in users\n"
+		       "boot <username>				Force logout user by name\n"
+		       "	#Example: boot <elonmusk69>\n"
+		       "boot_all				Force logout all users\n"
                        "nuke                			Delete all files and directories\n\n");
     	// Send to client
     	int result = dprintf(cli->s, "%s", global_buf);
@@ -194,7 +195,7 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
 		return 1;
 }
 
-int32 register_handle(Client *cli, char *username, char *args) {
+int32 register_handle(Client *cli, char *username, char *password) {
 	if (cli->logged_in) {
 		dprintf(cli->s, "Error: Already logged in as %s\n", cli->username);
 		return 1;
@@ -203,11 +204,11 @@ int32 register_handle(Client *cli, char *username, char *args) {
 		dprintf(cli->s, "Invalid username, must be 1-%d characters\n", MAX_USERNAME_LEN - 1);
 		return 1;	
 	}
-	if (strlen(args) < 1) {
-		dprintf(cli->s, "Missing password\n");
+	if (strlen(password) < 1 || strlen(password) >= MAX_PASSWORD_LEN) {
+		dprintf(cli->s, "Invalid password, must be 1-%d characters\n", MAX_PASSWORD_LEN - 1);
 		return 1;
 	}
-	User *user = create_new_user(username, args);
+	User *user = create_new_user(username, password);
 	if (!user) {
 		dprintf(cli->s, "Registration failed: Username may already exist or server error\n");
 		return 1;
@@ -216,12 +217,11 @@ int32 register_handle(Client *cli, char *username, char *args) {
 	user->logged_in = 1;
 	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 	add_logged_in_cli(cli);
-//	print_all_logged_in_cli();
 	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
 
-int32 login_handle(Client *cli, char *username, char *args) {
+int32 login_handle(Client *cli, char *username, char *password) {
 	if (cli->logged_in) {
 		dprintf(cli->s, "Error: Already logged in as %s\n", cli->username);
 		return 1;
@@ -230,18 +230,17 @@ int32 login_handle(Client *cli, char *username, char *args) {
 		dprintf(cli->s, "Invalid username, must be 1-%d characters\n", MAX_USERNAME_LEN - 1);
 		return 1;
 	}
-	if (strlen(args) < 1) {
-		dprintf(cli->s, "Missing password\n");
+	if (strlen(password) < 1 || strlen(password) >= MAX_PASSWORD_LEN) {
+		dprintf(cli->s, "Invalid password, must be 1-%d characters\n", MAX_PASSWORD_LEN - 1);
 		return 1;
 	}
-	int n = verify_user(username, args);
+	int n = verify_user(username, password);
 	
 	if (n == 0) {
 		cli->logged_in = 1;
 		mark_user_logged_in(username);
 		strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 		add_logged_in_cli(cli);
-//		print_all_logged_in_cli();
 		dprintf(cli->s, "Successfully logged in as '%s'\n", username);
 		return 0;
 	} else if (n == 1) {
@@ -254,6 +253,58 @@ int32 login_handle(Client *cli, char *username, char *args) {
 		dprintf(cli->s, "Login failed: User '%s' already logged in elsewhere\n", username);
 		return 1;
 	}
+	return 1;
+}
+
+int32 change_pw_handle(Client *cli, char *username, char *password) {
+	if (strlen(username) < 1 || strlen(username) >= MAX_USERNAME_LEN || (strcmp(username, ADMIN_USERNAME) == 0)) {
+		dprintf(cli->s, "Invalid username, must be 1-%d characters, cannot change Admin account\n", MAX_USERNAME_LEN - 1);
+		return 1;
+	}
+	if (strlen(password) < 1 || strlen(password) >= MAX_PASSWORD_LEN) {
+		dprintf(cli->s, "Invalid password, must be 1-%d characters\n", MAX_PASSWORD_LEN - 1);
+		return 1;
+	}
+	int n = verify_user(username, password);
+	
+	if (n == 0 || n == 3) {
+		char buf[MAX_PASSWORD_LEN];
+		dprintf(cli->s, "Credentials passed, please enter new password\n");
+		ssize_t i = read(cli->s, buf, sizeof(buf) - 1);
+		if (i <= 0) {
+			dprintf(cli->s, "Error reading response for new password: %s\n", 
+					i < 0 ? strerror(errno) : "connection closed");
+			fprintf(stderr, "Error reading response for new password: %s\n", 
+					i < 0 ? strerror(errno) : "connection closed");
+			return 1;
+		}
+		if (strlen(buf) < 1 || strlen(password) >= MAX_PASSWORD_LEN) {
+			dprintf(cli->s, "Invalid password, must be 1-%d characters\n", MAX_PASSWORD_LEN - 1);
+			return 1;
+		}
+		buf[i] = '\0';
+		char *newline = strchr(buf, '\n');
+		if (newline) *newline = '\0';
+
+		User *user = find_user(username);
+		if (!user) {
+			dprintf(cli->s, "Error accessing user settings\n");
+			fprintf(stderr, "Error accessing user settings\n");
+			return 1;
+		}
+		if (change_user_password(user, buf)) {
+			return 1;
+		}
+		dprintf(cli->s, "Password successfully changed for '%s'\n", username);
+		return 0;
+	} else if (n == 1) {
+		dprintf(cli->s, "Username '%s' not found\n", username);
+		return 1;
+	} else if (n == 2) {
+		dprintf(cli->s, "Incorrect password\n");
+		return 1;
+	}
+	dprintf(cli->s, "Server error, try again later\n");
 	return 1;
 }
 
@@ -270,12 +321,11 @@ int32 users_handle(Client *cli, char *unused1, char *unused2) {
 		size_t remaining = sizeof(global_buf);
 		size_t used = 0;
 		int written;
-
 		for (size_t i = 0; i < mem_control->user_count; i++) {
 			User *user = mem_control->users[i];
 			if (!user) continue;
 			size_t remaining = sizeof(global_buf) - used;
-			int written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "-- ONLINE --" : "== OFFLINE == ");
+			int written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "++ ONLINE ++" : "-- OFFLINE -- ");
 			if (written < 0 || (size_t)written >= remaining) {
 				fprintf(stderr, "players_handle: Buffer overflow prevented\n");
 				break;
@@ -287,7 +337,7 @@ int32 users_handle(Client *cli, char *unused1, char *unused2) {
 	return 0;
 }
 
-int32 logout_handle(Client *cli, char *username, char *args) {
+int32 logout_handle(Client *cli, char *username, char *unused) {
 	if (cli->logged_in == 1) {
 		remove_logged_in_cli(cli);
 		if (!mark_user_logged_out((const char *)cli->username)) {
@@ -305,12 +355,12 @@ int32 logout_handle(Client *cli, char *username, char *args) {
 	}
 }
 
-int32 tree_handle(Client *cli, char *folder, char *args) {
+int32 tree_handle(Client *cli, char *unused1, char *unused2) {
 	print_tree(cli->s, root);
 	return 0;
 }
 
-int32 newdir_handle(Client *cli, char *folder, char *args) {
+int32 newdir_handle(Client *cli, char *folder, char *unused) {
 	if (!cli->logged_in) {
 		dprintf(cli->s, "Please register or log in first to modify database\n");
 		return 1;
@@ -329,7 +379,7 @@ int32 newdir_handle(Client *cli, char *folder, char *args) {
 	return 0;
 }
 
-int32 back_handle(Client *cli, char *folder, char *args) {
+int32 back_handle(Client *cli, char *unused1, char *unused2) {
 	if (curr_node == root) {
 		dprintf(cli->s, "Already at root node '/'\n");
 	} else {
@@ -339,18 +389,18 @@ int32 back_handle(Client *cli, char *folder, char *args) {
 	return 0;
 }
 
-int32 root_handle(Client *cli, char *folder, char *args) {
+int32 root_handle(Client *cli, char *unused1, char *unused2) {
 	curr_node = root;
 	dprintf(cli->s, "Back to root directory '/'\n");
 	return 0;
 }
 
-int32 curr_handle(Client *cli, char *folder, char *args) {
+int32 curr_handle(Client *cli, char *unused1, char *unused2) {
 	dprintf(cli->s, "%s\n", curr_node->path);
 	return 0;
 }
 
-int32 jump_handle(Client *cli, char *folder, char *args) {
+int32 jump_handle(Client *cli, char *folder, char *unused) {
 	if ((strlen(folder) < 1)) {
 		dprintf(cli->s, "Missing folder name\n");
 		return 1;	
@@ -398,19 +448,16 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	strncpy(flag, p, sizeof(flag) - 1);
 	
 	if (!strcmp(flag, "-s")) {
-		pthread_mutex_lock(&mem_control->mutex);
 		zero(global_buf, sizeof(global_buf));
 		dprintf(cli->s, "Enter string:\n");
 		ssize_t n = read(cli->s, global_buf, sizeof(global_buf) - 1);
 		if (n <= 0) {
 			dprintf(cli->s, "Error reading response: %s\n", n < 0 ? strerror(errno) : "connection closed");
-			pthread_mutex_unlock(&mem_control->mutex);
 			return 1;
 		}
 		size_t size = sizeof(global_buf);
 		leaf = create_new_leaf_string(node, name, global_buf, size);
 	} else {
-		pthread_mutex_lock(&mem_control->mutex);
 		char *value = (char *)malloc(MAX_FILE_UPLOAD);
 		p = strtok(NULL, " ");
 		strncpy(value, p, MAX_FILE_UPLOAD - 1);
@@ -421,7 +468,6 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 			unsigned char *decoded = base64_decode(value, strlen(value), &decoded_len);
 			if (!decoded) {
 				dprintf(cli->s, "Base64 decoding failed\n");
-				pthread_mutex_unlock(&mem_control->mutex);
 				free(value);
 				return 1;
 			}
@@ -431,7 +477,6 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 			FILE *f = fopen(value, "rb");
 			if (!f) {
 				dprintf(cli->s, "Cannot open file from designated path %s\n", value);
-				pthread_mutex_unlock(&mem_control->mutex);
 				return 1;
 			}
 			fseek(f, 0, SEEK_END);
@@ -444,7 +489,6 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 			free(data);
 		} else {
 			dprintf(cli->s, "Invalid flag, please use -s , -i , -b for string/integer/binary\n");
-			pthread_mutex_unlock(&mem_control->mutex);
 			free(value);
 			return 1;
 		}
@@ -452,16 +496,13 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	}
 	if (!leaf) {
 		dprintf(cli->s, "Unable to add file %s.. make sure new file name is unique.. please try again..\n", name);
-		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
-
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
-	pthread_mutex_unlock(&mem_control->mutex);
 	return 0;	
 }
 
-int32 open_handle(Client *cli, char *key, char *args) {
+int32 open_handle(Client *cli, char *key, char *unused) {
 	Leaf *leaf;
 	Node *node;
 	if (strlen(key) < 1 || strlen(key) >= MAX_KEY_LEN || strstr(key, "/") || strstr(key, "..")) {
@@ -483,7 +524,7 @@ int32 open_handle(Client *cli, char *key, char *args) {
 	return 0;
 }
 
-int32 save_handle(Client *cli, char *key, char *args) {
+int32 save_handle(Client *cli, char *key, char *unused) {
 	Leaf *leaf;
 	if (strlen(key) < 1 || strlen(key) >= MAX_KEY_LEN || strstr(key, "/") || strstr(key, "..")) {
 		dprintf(cli->s, "Invalid file name, must be non-empty < %d chars, no '/' or '..'\n", MAX_KEY_LEN);
@@ -605,7 +646,7 @@ int32 classify_handle(Client *cli, char *file_name, char *unused) {
 	return 0;	
 }
 
-int32 nuke_handle(Client *cli, char *folder, char *args) {
+int32 nuke_handle(Client *cli, char *unused1, char *unused2) {
 	if (!cli->logged_in) {
 		dprintf(cli->s, "Please register or log in first to modify database\n");
 		return 1;
@@ -626,7 +667,6 @@ int32 nuke_handle(Client *cli, char *folder, char *args) {
 	if (newline) *newline = '\0';
 	if (!strcmp(buffer, "Y") || !strcmp(buffer, "y") || !strcmp(buffer, "Yes") || !strcmp(buffer, "yes")) {
 		reset_database();
-		
 		root = create_root_node();
 		if (!root) {
 			fprintf(stderr, "create_root_node() failure\n");
@@ -645,9 +685,32 @@ int32 nuke_handle(Client *cli, char *folder, char *args) {
 		dprintf(cli->s, "Invalid response, nuke command canceled\n");
 		return 1;
 	}
-		
-
 	return 0;
+}
+
+int32 boot_handle(Client *cli, char *username, char *unused) {
+	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
+		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
+		return 1;
+	}
+	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
+		pthread_mutex_lock(&mem_control->mutex);
+		ClientHashEntry *entry = mem_control->logged_in_clients[i];
+		while (entry) {
+			if (strcmp(entry->client->username, username) == 0) {
+				entry->client->logged_in = 0;
+				mark_user_logged_out(username);
+				entry->client->username[0] = '\0';
+				dprintf(cli->s, "User '%s' successfully logged out\n", username);
+				pthread_mutex_unlock(&mem_control->mutex);
+				return 0;
+			}
+			entry = entry->next;
+		}
+	}
+	dprintf(cli->s, "User '%s' not found\n", username);
+	pthread_mutex_unlock(&mem_control->mutex);
+	return 1;
 }
 
 int32 boot_all_handle(Client *cli, char *unused1, char *unused2) {
@@ -661,6 +724,7 @@ int32 boot_all_handle(Client *cli, char *unused1, char *unused2) {
 		return 1;
 	}
 	fprintf(stderr, "All current logged in users booted\n");
+	dprintf(cli->s, "All current logged in users booted\n");
 	return 0;
 }
 
@@ -677,16 +741,17 @@ int32 exit_handle(Client *cli, char *folder, char *args) {
 }
 
 Callback get_command(int8 *cmd_name) {
-	int16 n, arrlen;
-	if (sizeof(c_handlers) < 16)
-		return 0;
-	arrlen = sizeof(c_handlers) / 16;
-	for (n = 0; n < arrlen; n++) {
-		if (!strcmp((char *)cmd_name, (char *)c_handlers[n].cmd_name)) {
-			return c_handlers[n].callback_function;
+	if (!cmd_name || !cmd_name[0]) {
+		fprintf(stderr, "get_command: Invalid or empty command name\n");
+		return NULL;
+	}
+	static const size_t arrlen = sizeof(c_handlers) / sizeof(c_handlers[0]);
+	for (size_t i = 0; i < arrlen; i++) {
+		if (c_handlers[i].cmd_name && strcmp((char *)cmd_name, (char *)c_handlers[i].cmd_name) == 0) {
+			return c_handlers[i].callback_function;
 		}
 	}
-
+	fprintf(stderr, "get_command: Command '%s' not found\n", cmd_name);
 	return NULL;
 }
 
@@ -762,7 +827,6 @@ Client *build_client_struct() {
 		fprintf(stderr, "build_client_struct() malloc failure\n");
 		return NULL;
 	}
-//	fprintf(stderr, "Client struct built at %p\n", client);
 	client->logged_in = 0;
 	return client;
 }
