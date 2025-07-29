@@ -34,10 +34,6 @@
 #define MAX_USERS 100
 #define MAX_PASSWORD_LEN 40
 
-
-#define find_last_leaf(x)		find_last_leaf_linear(x)
-#define find_last_child_node(x)		find_last_child_node_linear(x)
-
 #define CONCAT_PATH(dest, parent_path, child_path, max_len)			\
 	do {									\
 		if (strcmp((parent_path), "/") == 0)				\
@@ -81,21 +77,18 @@ typedef unsigned char int8;
 typedef enum {
 	VALUE_STRING,
 	VALUE_INT,
-	//VALUE_DOUBLE,
 	VALUE_BINARY
 } ValueType;
 
 typedef union {
 	char *string;
 	int32_t integer;
-	//double floating;
 	struct {
 		void *data;
 		size_t size;
 		int compressed;
 	} binary;
 } LeafValue;
-
 
 struct s_node {
 	struct s_node *parent;
@@ -168,13 +161,15 @@ extern Node *root;
 
 void *alloc_shared(size_t size);
 void zero(void *, size_t);
+void node_hash_table_init();
+void leaf_hash_table_init();
+Node *find_node_by_hash(char *);
+Leaf *find_leaf_by_hash(char *);
 void print_tree(int, Node *);
+// void add_node_to_table(Node *);
 User *create_admin_user();
 Node *create_root_node();
 Node *create_new_node(Node *, char *);
-void add_node_to_table(Node *);
-Node *find_node_by_hash(char *);
-Leaf *find_leaf_by_hash(char *);
 Leaf *create_new_leaf_string(Node *, char *, char *, size_t);
 Leaf *create_new_leaf_int(Node *, char *, int32_t);
 Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
@@ -184,17 +179,11 @@ int change_user_password(User *, const char *);
 int mark_user_logged_in(const char *);
 int mark_user_logged_out(const char *);
 int verify_user(const char *, const char *);
-Node *find_node_linear(Node *, char *);
-Leaf *find_leaf_linear(Node *, char *);
 void print_node(int, Node *);
 void print_leaf(int, Leaf *);
 int delete_node(Node *);
 int delete_leaf(char *);
 void reset_database();
-void free_leaf(Leaf *);
-void free_node(Node *);
-void node_hash_table_init();
-void leaf_hash_table_init();
 void cleanup_database(void);
 int init_saved_database();
 void verify_database(const char *);

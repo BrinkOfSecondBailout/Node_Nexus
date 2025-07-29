@@ -935,7 +935,6 @@ int init_root() {
 		mem_control = NULL;
 		return 1;
 	}
-	add_node_to_table(root);
 	create_admin_user();
 	mem_control->dirty = 0;
 	return 0;

@@ -42,7 +42,7 @@ void leaf_hash_table_init() {
 	pthread_mutex_unlock(&mem_control->mutex);
 }
 
-char *indent(int8 n) {
+static char *indent(int8 n) {
 	static char buf[512];
 	if (n < 1 || n >= 128) {
 		buf[0] = '\0';
@@ -56,7 +56,7 @@ char *indent(int8 n) {
 	return buf;
 }
 
-int write_str(int fd, const char *str) {
+static int write_str(int fd, const char *str) {
 	size_t len = strlen(str);
 	if (len == 0) return 0;
 	if (write(fd, str, len) == -1) {
@@ -73,20 +73,6 @@ static void print_original_node(Node *n, int8 indentation, int fd) {
 		fprintf(stderr, "print_original_node() failure\n");	
 	}
 	return;
-}
-
-static Leaf *find_first_leaf(Node *parent) {
-	Leaf *l;
-	CHECK_NULL(parent, "find_first_leaf() failure, invalid parent node");
-	if (!parent->leaf)
-		return NULL;
-	l = parent->leaf;
-
-	if (!l) {
-		fprintf(stderr, "find_first_leaf() failure, invalid leaf found\n");
-		return NULL;
-	}
-	return l;
 }
 
 static Leaf *find_last_leaf_linear(Node *parent) {
@@ -118,32 +104,7 @@ Leaf *find_leaf_by_hash(char *key) {
 	return NULL;
 }
 
-Leaf *find_leaf_linear(Node *root, char *key) {
-	Node *n;
-	Leaf *l;
-	for (n = root; n; n = n->child) {
-		l = find_first_leaf(n);
-		while (l) {
-			if (!strcmp(l->key, key)) {
-				return l;
-			}
-			l = l->sibling;
-		}
-		while (n->sibling) {
-			n = n->sibling;
-			l = find_first_leaf(n);
-			while (l) {
-				if (!strcmp(l->key, key)) {
-					return l;
-				}
-				l = l->sibling;
-			}
-		}
-	}
-	return NULL;
-}
-
-Node *find_node_and_siblings(Node *node, char *path) {
+static Node *find_node_and_siblings(Node *node, char *path) {
 	while (node) {
 		if (strstr(node->path, path)) {
 			return node;
@@ -166,26 +127,6 @@ Node *find_node_by_hash(char *key) {
 	}
 	pthread_mutex_unlock(&mem_control->mutex);
 	return NULL;
-}
-
-Node *find_node_linear(Node *root, char *path) {
-	Node *node, *temp;
-	for (node = root; node; node = node->child) {
-		if (strstr(node->path, path)) {
-			return node;
-		}
-		temp = find_node_and_siblings(node, path);
-		if (temp) return temp;
-	}
-	return NULL;
-}
-
-static Node *find_first_child_node(Node *parent) {
-	Node *n;
-	CHECK_NULL(parent, "find_first_child_node() failure, invalid parent node");
-	n = parent->child;
-	CHECK_NULL(parent, "find_first_child_node() failure, no node found");
-	return n;
 }
 
 static Node *find_last_child_node_linear(Node *parent) {
@@ -214,14 +155,13 @@ static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
 	return 0;
 }
 
-
 static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	Leaf *l, *first;
 	const int truncate_limit = 50;
 	if (!n) return;
 	if (n->leaf) {
-		first = find_first_leaf(n);
+		first = n->leaf;
 		for (l = first; l; l = l->sibling) {
 			zero((void *)buf, sizeof(buf));
 			switch (l->type) {
@@ -308,7 +248,7 @@ void print_tree(int fd, Node *root) {
 	
 }
 
-void add_node_to_table(Node *node) {
+static void add_node_to_table(Node *node) {
 	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
 	NodeHashEntry *entry = alloc_shared(sizeof(NodeHashEntry));
 	if (!entry) {
@@ -356,6 +296,7 @@ Node *create_root_node() {
 	strncpy(root->key, "root", MAX_KEY_LEN - 1);
 	strncpy(root->path, "/", MAX_PATH_LEN - 1);
 	root->path[MAX_PATH_LEN - 1] = '\0';
+	printf("CHECK\n");
 	add_node_to_table(root);
 	return root;
 }
@@ -375,7 +316,7 @@ Node *create_new_node(Node *parent, char *name) {
 		fprintf(stderr, "Path too long in new node\n");
 		return NULL;
 	}
-	last = find_last_child_node(parent);
+	last = find_last_child_node_linear(parent);
 	if (!last) {
 		parent->child = new;
 	} else {
@@ -424,7 +365,7 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 		return NULL;
 	}
 
-	last = find_last_leaf(parent);
+	last = find_last_leaf_linear(parent);
 	size = sizeof(Leaf);
 	new = alloc_shared(size);
 	CHECK_NULL(new, "create_leaf_prototype() malloc failure\n");
@@ -720,12 +661,67 @@ void print_leaf(int cli_fd, Leaf *l) {
 	return;
 }
 
+static void free_leaf(Leaf *leaf) {
+	if (!leaf) return;
+	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
+	pthread_mutex_lock(&mem_control->mutex);
+	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
+	LeafHashEntry *prev = NULL;
+	while (entry) {
+		if (entry->leaf == leaf) {
+			if (prev) {
+				prev->next = entry->next;
+			} else {
+				mem_control->leaf_hash_table[index] = entry->next;
+			}
+			mem_control->leaf_count--;
+			break;
+		}
+		prev = entry;
+		entry = entry->next;
+	}
+	pthread_mutex_unlock(&mem_control->mutex);
+	return;
+}
+
+static void free_node(Node *node) {
+	if (!node) return;
+	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
+	pthread_mutex_lock(&mem_control->mutex);
+	NodeHashEntry *entry = mem_control->node_hash_table[index];
+	NodeHashEntry *prev = NULL;
+	while (entry) {
+		if (entry->node == node) {
+			if (prev) {
+				prev->next = entry->next;
+			} else {
+				mem_control->node_hash_table[index] = entry->next;
+			}
+			mem_control->node_count--;
+			break;
+		}
+		prev = entry;
+		entry = entry->next;
+	}
+	Leaf *leaf = node->leaf;
+	while (leaf) {
+		Leaf *next = leaf->sibling;
+		free_leaf(leaf);
+		leaf = next;
+	}
+	if (node->child) {
+		free_node(node->child);
+	}
+	pthread_mutex_unlock(&mem_control->mutex);
+	return;
+}
+
 int delete_node(Node *node) {
 	pthread_mutex_lock(&mem_control->mutex);
 	Node *parent, *first;
 	Node *prev = NULL;
        	parent = node->parent;
-	first = find_first_child_node(parent);
+	first = parent->child;
 	while (first) {
 		if (first == node) {
 			if (first->sibling) {
@@ -766,7 +762,7 @@ int delete_leaf(char *name) {
 		return 1;
 	}
 	parent = leaf->parent;
-	first = find_first_leaf(parent);
+	first = parent->leaf;
 	while (first) {
 		if (first == leaf) {
 			if (first->sibling) {
@@ -797,75 +793,21 @@ int delete_leaf(char *name) {
 }
 
 void reset_database() {
-	pthread_mutex_lock(&mem_control->mutex);
 	if (root) {
 		free_node(root);
 		root = NULL;
 	}
 	node_hash_table_init();
 	leaf_hash_table_init();
+	pthread_mutex_lock(&mem_control->mutex);
 	mem_control->shared_mem_used = 0;
 	mem_control->dirty = 1;
 	pthread_mutex_unlock(&mem_control->mutex);
 	return;
 }
 
-void free_leaf(Leaf *leaf) {
-	if (!leaf) return;
-	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
-	pthread_mutex_lock(&mem_control->mutex);
-	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
-	LeafHashEntry *prev = NULL;
-	while (entry) {
-		if (entry->leaf == leaf) {
-			if (prev) {
-				prev->next = entry->next;
-			} else {
-				mem_control->leaf_hash_table[index] = entry->next;
-			}
-			mem_control->leaf_count--;
-			break;
-		}
-		prev = entry;
-		entry = entry->next;
-	}
-	pthread_mutex_unlock(&mem_control->mutex);
-	return;
-}
 
-void free_node(Node *node) {
-	if (!node) return;
-	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
-	pthread_mutex_lock(&mem_control->mutex);
-	NodeHashEntry *entry = mem_control->node_hash_table[index];
-	NodeHashEntry *prev = NULL;
-	while (entry) {
-		if (entry->node == node) {
-			if (prev) {
-				prev->next = entry->next;
-			} else {
-				mem_control->node_hash_table[index] = entry->next;
-			}
-			mem_control->node_count--;
-			break;
-		}
-		prev = entry;
-		entry = entry->next;
-	}
-	Leaf *leaf = node->leaf;
-	while (leaf) {
-		Leaf *next = leaf->sibling;
-		free_leaf(leaf);
-		leaf = next;
-	}
-	if (node->child) {
-		free_node(node->child);
-	}
-	pthread_mutex_unlock(&mem_control->mutex);
-	return;
-}
-
-int serialize_node(FILE *f, Node *node) {
+static int serialize_node(FILE *f, Node *node) {
 	uint32_t null_marker = 0xFFFFFFFF;
 	if (!node) {
 		fwrite(&null_marker, sizeof(uint32_t), 1, f);
@@ -936,12 +878,12 @@ int serialize_node(FILE *f, Node *node) {
 }
 
 
-int serialize_all_nodes(FILE *f) {
+static int serialize_all_nodes(FILE *f) {
 	serialize_node(f, root);
 	return 0;	
 }
 
-void serialize_database(const char *filename) {
+static void serialize_database(const char *filename) {
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "wb");
 	if (!f) {
@@ -970,7 +912,7 @@ void serialize_database(const char *filename) {
 	return;
 }
 
-Node *deserialize_node(FILE *f, Node *parent) {
+static Node *deserialize_node(FILE *f, Node *parent) {
 	uint32_t child_count, sibling_count, leaf_count;
 	if (fread(&child_count, sizeof(uint32_t), 1, f) != 1) {
 		if (feof(f)) return NULL;
@@ -1072,7 +1014,7 @@ Node *deserialize_node(FILE *f, Node *parent) {
 	return node;
 }
 
-int deserialize_database(const char *filename) {
+static int deserialize_database(const char *filename) {
 	pthread_mutex_lock(&mem_control->mutex);
 	FILE *f = fopen(filename, "rb");
 	if (!f) {
@@ -1252,7 +1194,6 @@ int init_saved_database(void) {
 		return 1;
 	}
 	return 0;
-
 }
 
 void cleanup_database(void) {
