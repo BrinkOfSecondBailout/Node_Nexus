@@ -2,7 +2,7 @@
 
 ## Overview
 
-Node Nexus is a lightweight, socket-based server written in C that implements a custom in-memory database for managing a hierarchical file system. Designed as a learning project to demonstrate advanced systems programming concepts, it features user authentication, a tree-based data structure, and binary serialization for persistent storage. Instead of relying on a traditional database like SQLite, Node Nexus uses a custom in-memory database to showcase low-level memory management, thread-safe operations, and efficient binary serialization/deserialization. Multiple clients can connect to the server safely and effectively at once (up to a limit of course).
+Node Nexus is a lightweight, socket-based server written in C that implements a custom in-memory database for managing a hierarchical file system. Designed with advanced systems programming concepts, it features user authentication, a tree-based data structure, and binary serialization for persistent storage. Instead of relying on a traditional database like SQLite, Node Nexus uses a custom in-memory database to showcase low-level memory management, thread-safe operations, and efficient binary serialization/deserialization. Multiple clients can connect to the server safely and effectively at once (up to a limit of course).
 
 ### Key Features
 
@@ -42,7 +42,7 @@ sudo apt install build-essential libz-dev libssl-dev
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/BrinkOfSecondBailout/node-nexus.git
+   git clone https://github.com/BrinkOfSecondBailout/Node-Nexus.git
    cd node-nexus/src
    ```
 
