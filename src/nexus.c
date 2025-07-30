@@ -10,7 +10,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"register", register_handle },
 	{ (char *)"login", login_handle },
 	{ (char *)"change_pw", change_pw_handle },
-	{ (char *)"users", users_handle},
+	{ (char *)"users", users_handle },
 	{ (char *)"logout", logout_handle },
 	{ (char *)"tree", tree_handle },
 	{ (char *)"newdir", newdir_handle },
@@ -18,14 +18,15 @@ Command_Handler c_handlers[] = {
 	{ (char *)"root", root_handle },
 	{ (char *)"curr", curr_handle },
 	{ (char *)"jump", jump_handle },
-	{ (char *)"addfile", addfile_handle},
-	{ (char *)"open", open_handle},
-	{ (char *)"save", save_handle},
-	{ (char *)"kill", kill_handle},
-	{ (char *)"classify", classify_handle},
-	{ (char *)"nuke", nuke_handle},
-	{ (char *)"boot", boot_handle},
-	{ (char *)"boot_all", boot_all_handle},
+	{ (char *)"addfile", addfile_handle },
+	{ (char *)"open", open_handle },
+	{ (char *)"save", save_handle },
+	{ (char *)"kill", kill_handle },
+	{ (char *)"classify", classify_handle },
+	{ (char *)"nuke", nuke_handle },
+	{ (char *)"banish", banish_handle },
+	{ (char *)"boot", boot_handle },
+	{ (char *)"boot_all", boot_all_handle },
 	{ (char *)"exit", exit_handle }	
 };
 
@@ -136,11 +137,11 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
         WRITE_GLOBAL_BUF("General Commands:\n"
                        "-----------------\n"
 		       "help                			List all available commands\n"
-                       "register <username> <pw>  		Create a new account\n"
+                       "register <user> <pw>	  		Create a new account\n"
                        "  	#Example: register alice password123\n"
-                       "login <user> <pass>    			Log in to an account\n"
+                       "login <user> <pw>    			Log in to an account\n"
                        "  	#Example: login alice password123\n"
-                       "change_pw <username> <pw>              	Change password for one user\n"
+                       "change_pw <user> <pw>              	Change password for one user\n"
                        "  	#Example: change_pw alice password123\n"
 		       "		  (when prompted) password234\n"
                        "logout              			Log out of current account\n"
@@ -173,6 +174,7 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
 	WRITE_GLOBAL_BUF("Admin Commands (Admin Only):\n"
                        "----------------------------\n"
                        "users             			List all registered users\n"
+                       "banish <user>             		Delete user\n"
 		       "classify <filename>			Use AI to gauge sentiment of a text file (beta mode)\n"
 		       "	#Example: classify diary.txt\n"
 		       "boot <username>				Force logout user by name\n"
@@ -193,6 +195,12 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
 		global_buf[sizeof(global_buf) - 1] = '\0';
 		dprintf(cli->s, "%s\n", global_buf);
 		return 1;
+}
+
+static int verify_logged_in(Client *cli) {
+	if (cli->logged_in) return 0;
+	dprintf(cli->s, "Must be logged in to execute this command\n");
+	return 1;
 }
 
 int32 register_handle(Client *cli, char *username, char *password) {
@@ -309,10 +317,7 @@ int32 change_pw_handle(Client *cli, char *username, char *password) {
 }
 
 int32 users_handle(Client *cli, char *unused1, char *unused2) {
-	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
-		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
-		return 1;
-	}
+	if (verify_admin(cli)) return 1;
 	if (mem_control->user_count == 0) {
 		strncpy(global_buf, "No registered users currently..\n", sizeof(global_buf));
 		global_buf[sizeof(global_buf) - 1] = '\0';
@@ -361,10 +366,7 @@ int32 tree_handle(Client *cli, char *unused1, char *unused2) {
 }
 
 int32 newdir_handle(Client *cli, char *folder, char *unused) {
-	if (!cli->logged_in) {
-		dprintf(cli->s, "Please register or log in first to modify database\n");
-		return 1;
-	}
+	if (verify_logged_in(cli)) return 1;
 	if ((strlen(folder) < 1)) {
 		dprintf(cli->s, "Please enter a name for new directory\n");
 		return 1;
@@ -417,10 +419,7 @@ int32 jump_handle(Client *cli, char *folder, char *unused) {
 
 
 int32 addfile_handle(Client *cli, char *folder, char *args) {
-	if (!cli->logged_in) {
-		dprintf(cli->s, "Please register or log in first to modify database\n");
-		return 1;
-	}
+	if (verify_logged_in(cli)) return 1;
 	if ((strlen(folder) == 0)) {
 		dprintf(cli->s, "Missing folder name, use 'curr' for current directory\n");
 		return 1;
@@ -535,7 +534,6 @@ int32 save_handle(Client *cli, char *key, char *unused) {
 		dprintf(cli->s, "File '%s' not found or not binary\n", key);
 		return 1;
 	}
-	
 	size_t encoded_len;
 	char *encoded;
 	if (leaf->value.binary.compressed) {
@@ -568,10 +566,7 @@ int32 save_handle(Client *cli, char *key, char *unused) {
 }
 
 int32 kill_handle(Client *cli, char *flag, char *name) {
-	if (!cli->logged_in) {
-		dprintf(cli->s, "Please register or log in first to modify database\n");
-		return 1;
-	}
+	if (verify_logged_in(cli)) return 1;
 	if (strcmp(flag, "-d") && strcmp(flag, "-f")) {
 		dprintf(cli->s, "Invalid flag, use -d for directory or -f for file\n");
 		return 1;
@@ -628,7 +623,14 @@ int32 kill_handle(Client *cli, char *flag, char *name) {
 	return 1;
 }
 
+static int verify_admin(Client *cli) {
+	if (cli->logged_in && (strcmp(cli->username, ADMIN_USERNAME) == 0)) return 0;
+	dprintf(cli->s, "Must be logged in as admin to execute this command\n");
+	return 1;
+}
+
 int32 classify_handle(Client *cli, char *file_name, char *unused) {
+	if (verify_admin(cli)) return 1;
 	Leaf *leaf = find_leaf_by_hash(file_name);
 	if (!leaf || leaf->type != VALUE_STRING) {
 		dprintf(cli->s, "Invalid or not a string file\n");
@@ -644,14 +646,7 @@ int32 classify_handle(Client *cli, char *file_name, char *unused) {
 }
 
 int32 nuke_handle(Client *cli, char *unused1, char *unused2) {
-	if (!cli->logged_in) {
-		dprintf(cli->s, "Please register or log in first to modify database\n");
-		return 1;
-	}
-	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
-		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
-		return 1;
-	}
+	if (verify_admin(cli)) return 1;
 	char buffer[256] = {0};
 	dprintf(cli->s, "This will delete all files and folders, proceed?\n~ Y/N ~\n");
 	ssize_t n = read(cli->s, buffer, sizeof(buffer) - 1);
@@ -685,11 +680,27 @@ int32 nuke_handle(Client *cli, char *unused1, char *unused2) {
 	return 0;
 }
 
-int32 boot_handle(Client *cli, char *username, char *unused) {
-	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
-		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
+int32 banish_handle(Client *cli, char *username, char *unused) {
+	if (verify_admin(cli)) return 1;
+	if (strlen(username) < 0 || strlen(username) >= MAX_USERNAME_LEN) {
+		dprintf(cli->s, "Invalid username, must be between 1-%d characters\n", MAX_USERNAME_LEN - 1);
 		return 1;
 	}
+	User *user = find_user(username);
+	if (!user) {
+		dprintf(cli->s, "User does not exist\n");
+		return 1;
+	}
+	if (delete_user(user)) {
+		dprintf(cli->s, "Unable to delete user %s\n", username);
+		return 1;
+	}
+	dprintf(cli->s, "User %s successfully banished\n", username);
+	return 0;
+}
+
+int32 boot_handle(Client *cli, char *username, char *unused) {
+	if (verify_admin(cli)) return 1;
 	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
 		pthread_mutex_lock(&mem_control->mutex);
 		ClientHashEntry *entry = mem_control->logged_in_clients[i];
@@ -711,10 +722,7 @@ int32 boot_handle(Client *cli, char *username, char *unused) {
 }
 
 int32 boot_all_handle(Client *cli, char *unused1, char *unused2) {
-	if (strcmp(cli->username, ADMIN_USERNAME) != 0) {
-		dprintf(cli->s, "Not logged in as admin, authorization failed\n");
-		return 1;
-	}
+	if (verify_admin(cli)) return 1;
 	if (log_all_users_out(cli->s)) {
 		dprintf(cli->s, "Unsuccessful boot_all attempt, try again\n");
 		fprintf(stderr, "Unsuccessful boot_all attempt\n");

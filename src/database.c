@@ -488,6 +488,11 @@ User *find_user(const char *username) {
 	return NULL;
 }
 
+int delete_user(User *user) {
+	
+	return 0;
+}
+
 int change_user_password(User *user, const char *password) {
 	if (!user || !password | (strlen(password) < 1) || strlen(password) >= MAX_PASSWORD_LEN) {
 		fprintf(stderr, "change_user_password: Invalid user or password len\n");

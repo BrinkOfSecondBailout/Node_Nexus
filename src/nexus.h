@@ -59,6 +59,7 @@ int32 open_handle(Client *, char *, char *);
 int32 save_handle(Client *, char *, char *);
 int32 kill_handle(Client *, char *, char *);
 int32 classify_handle(Client *, char *, char *);
+int32 banish_handle(Client *, char *, char *);
 int32 nuke_handle(Client *, char *, char *);
 int32 boot_handle(Client *, char *, char *);
 int32 boot_all_handle(Client *, char *, char *);

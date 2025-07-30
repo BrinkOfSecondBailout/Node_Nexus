@@ -69,6 +69,7 @@ typedef struct s_client_hash_entry ClientHashEntry;
 typedef struct s_node_hash_entry NodeHashEntry;
 typedef struct s_leaf_hash_entry LeafHashEntry;
 typedef struct s_user User;
+typedef struct s_user_hash_entry UserHashEntry;
 
 typedef unsigned int int32;
 typedef unsigned short int int16;
@@ -133,6 +134,12 @@ struct s_client_hash_entry {
 	struct s_client_hash_entry *next;
 };
 
+struct s_user_hash_entry {
+	char key[MAX_KEY_LEN];
+	User *user;
+	struct s_user_hash_entry *next;
+};
+
 struct s_user {
 	char username[MAX_USERNAME_LEN];
 	unsigned char password_hash[SHA256_DIGEST_LENGTH]; //32bytes
@@ -166,7 +173,6 @@ void leaf_hash_table_init();
 Node *find_node_by_hash(char *);
 Leaf *find_leaf_by_hash(char *);
 void print_tree(int, Node *);
-// void add_node_to_table(Node *);
 User *create_admin_user();
 Node *create_root_node();
 Node *create_new_node(Node *, char *);
