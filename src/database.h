@@ -34,6 +34,7 @@
 #define MAX_USERS 100
 #define MAX_PASSWORD_LEN 40
 
+#define PRINT_CHECK()			fprintf(stderr, "CHECK_POINT\n");
 #define CONCAT_PATH(dest, parent_path, child_path, max_len)			\
 	do {									\
 		if (strcmp((parent_path), "/") == 0)				\
@@ -155,7 +156,7 @@ typedef struct SharedMemControl {
 	size_t node_count;
 	LeafHashEntry *leaf_hash_table[LEAF_HASH_TABLE_SIZE];
 	size_t leaf_count;
-	User *users[MAX_USERS];
+	UserHashEntry *user_hash_table[MAX_USERS];
 	size_t user_count;
 	ClientHashEntry *logged_in_clients[MAX_CONNECTIONS];
 	size_t logged_in_client_count;
@@ -170,6 +171,7 @@ void *alloc_shared(size_t size);
 void zero(void *, size_t);
 void node_hash_table_init();
 void leaf_hash_table_init();
+void user_hash_table_init();
 Node *find_node_by_hash(char *);
 Leaf *find_leaf_by_hash(char *);
 void print_tree(int, Node *);
@@ -181,9 +183,10 @@ Leaf *create_new_leaf_int(Node *, char *, int32_t);
 Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
 User *create_new_user(const char *, const char *);
 User *find_user(const char *);
+int delete_user(User *);
 int change_user_password(User *, const char *);
-int mark_user_logged_in(const char *);
-int mark_user_logged_out(const char *);
+void mark_user_logged_in(User *);
+void mark_user_logged_out(User *);
 int verify_user(const char *, const char *);
 void print_node(int, Node *);
 void print_leaf(int, Leaf *);
