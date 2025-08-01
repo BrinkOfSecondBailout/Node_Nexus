@@ -35,7 +35,7 @@ void print_cli(Client *client) {
 }
 
 void print_all_logged_in_cli() {
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
 	ClientHashEntry *entry;
 	Client *client;
 	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
@@ -47,8 +47,24 @@ void print_all_logged_in_cli() {
 			entry = entry->next;
 		}
 	}
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
 	return;
+}
+
+Client *find_client(const char *username) {
+	MUTEX_LOCK;
+	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
+		ClientHashEntry *entry = mem_control->logged_in_clients[i];
+		while (entry) {
+			if (strcmp(entry->client->username, username) == 0) {
+				MUTEX_UNLOCK;
+				return entry->client;
+			}
+			entry = entry->next;
+		}
+	}
+	MUTEX_UNLOCK;
+	return NULL;
 }
 
 int add_logged_in_cli(Client *cli) {
@@ -56,13 +72,16 @@ int add_logged_in_cli(Client *cli) {
 		fprintf(stderr, "add_logged_in_cli() Invalid or empty username\n");
 		return 1;
 	}
-	pthread_mutex_lock(&mem_control->mutex);
-	size_t connections = mem_control->active_connections;
-	pthread_mutex_unlock(&mem_control->mutex);
-	if (connections >= MAX_CONNECTIONS) {
+	/*
+	MUTEX_LOCK;
+	if (mem_control->active_connections >= MAX_CONNECTIONS) {
 		fprintf(stderr, "Maximum client connections breached\n");
+		MUTEX_UNLOCK;
 		return 1;
 	}
+	MUTEX_UNLOCK;
+	*/
+
 	uint32_t index = HASH_KEY(cli->username, MAX_CONNECTIONS);
 	ClientHashEntry *entry = alloc_shared(sizeof(ClientHashEntry));
 	if (!entry) {
@@ -72,11 +91,11 @@ int add_logged_in_cli(Client *cli) {
 	strncpy(entry->key, cli->username, MAX_KEY_LEN);
 	entry->key[MAX_KEY_LEN - 1] = '\0';
 	entry->client = cli;
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
 	entry->next = mem_control->logged_in_clients[index];
 	mem_control->logged_in_clients[index] = entry;
 	mem_control->logged_in_client_count++;
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
 	return 0;
 }
 
@@ -85,7 +104,7 @@ int remove_logged_in_cli(Client *cli) {
 		fprintf(stderr, "Invalid client or empty username\n");
 		return 1;
 	}
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
 	uint32_t index = HASH_KEY(cli->username, MAX_CONNECTIONS);
 	ClientHashEntry *entry = mem_control->logged_in_clients[index];
 	ClientHashEntry *prev = NULL;
@@ -98,13 +117,13 @@ int remove_logged_in_cli(Client *cli) {
 			}
 			mem_control->logged_in_client_count--;
 			fprintf(stderr, "Successfully removed logged in client\n");
-			pthread_mutex_unlock(&mem_control->mutex);
+			MUTEX_UNLOCK;
 			return 0;
 		}
 		prev = entry;
 		entry = entry->next;
 	}
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
 	fprintf(stderr, "Client not found in logged in\n");
 	return 1;
 }
@@ -132,7 +151,7 @@ int complete_client_logout(Client *client) {
 }
 
 void log_all_users_out(int cli_fd) {
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
 	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
 	dprintf(cli_fd, "Total logged in users: %ld\n", mem_control->logged_in_client_count);
 	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
@@ -142,13 +161,13 @@ void log_all_users_out(int cli_fd) {
 				entry = entry->next;
 				continue;
 			}
-			pthread_mutex_unlock(&mem_control->mutex);
+			MUTEX_UNLOCK;
 			complete_client_logout(entry->client);
-			pthread_mutex_lock(&mem_control->mutex);
+			MUTEX_LOCK;
 			entry = entry->next;
 		}
 	}
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
 	return;
 }
 
@@ -245,10 +264,12 @@ int32 register_handle(Client *cli, char *username, char *password) {
 		dprintf(cli->s, "Registration failed: Username may already exist or server error\n");
 		return 1;
 	}
+	fprintf(stderr, "register_handle Count=%zu\n", mem_control->user_count);
 	cli->logged_in = 1;
 	user->logged_in = 1;
 	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 	add_logged_in_cli(cli);
+	fprintf(stderr, "register_handle Count=%zu\n", mem_control->user_count);
 	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
@@ -374,6 +395,7 @@ int32 newdir_handle(Client *cli, char *folder, char *unused) {
 	} else {
 		dprintf(cli->s, "Unsuccessful at creating new directory '%s' in current folder '%s'.. Please try again..\n", folder, curr_node->path);
 	}
+	fprintf(stderr, "End of newdir_handle User count: %zu\n", mem_control->user_count);
 	return 0;
 }
 
@@ -450,6 +472,8 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 			dprintf(cli->s, "Error reading response: %s\n", n < 0 ? strerror(errno) : "connection closed");
 			return 1;
 		}
+		char *newline = strchr(global_buf, '\n');
+		if (newline) *newline = '\0';
 		size_t size = sizeof(global_buf);
 		leaf = create_new_leaf_string(node, name, global_buf, size);
 	} else {
@@ -494,6 +518,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		return 1;
 	}
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
+	fprintf(stderr, "End of addfile_handle User count: %zu\n", mem_control->user_count);
 	return 0;	
 }
 
@@ -627,34 +652,52 @@ static int verify_admin(Client *cli) {
 
 int32 users_handle(Client *cli, char *unused1, char *unused2) {
 	if (verify_admin(cli)) return 1;
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
 	size_t user_count = mem_control->user_count;
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
+	zero(global_buf, sizeof(global_buf));
+	size_t remaining = sizeof(global_buf);
+	size_t used = 0;
+	int written = 0;
 	if (user_count == 0) {
+		/*
 		strncpy(global_buf, "No registered users currently..\n", sizeof(global_buf));
 		global_buf[sizeof(global_buf) - 1] = '\0';
+		*/
+		char *s = "No registered users yet...";
+		written = snprintf(global_buf + used, remaining, "%s\n", s);
+		if (written < 0) {
+			fprintf(stderr, "users_handle: Error writing to buffer\n");
+		}
+		global_buf[sizeof(global_buf) - 1] = '\0';
 	} else {
-		zero(global_buf, sizeof(global_buf));
-		size_t remaining = sizeof(global_buf);
-		size_t used = 0;
-		int written;
-		pthread_mutex_lock(&mem_control->mutex);
-		for (size_t i = 0; i < MAX_USERS; i++) {
-			UserHashEntry *entry = mem_control->user_hash_table[i];
-			while (entry) {
-				User *user = entry->user;
-				remaining = sizeof(global_buf) - used;
-				written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "++ ONLINE ++" : "-- OFFLINE -- ");
-				if (written < 0 || (size_t)written >= remaining) {
-					fprintf(stderr, "players_handle: Buffer overflow prevented\n");
-					break;
+		MUTEX_LOCK;
+		size_t user_count = mem_control->user_count;
+		char *str = "TOTAL USERS: ";
+		written = snprintf(global_buf, remaining, "\n%s%zu\n\n", str, user_count);
+		if (written < 0 || (size_t)written >= remaining) {
+			fprintf(stderr, "users_handle: Buffer overflow prevented\n");
+		} else {
+			used += written;
+			remaining = sizeof(global_buf) - used;
+			for (size_t i = 0; i < MAX_USERS; i++) {
+				UserHashEntry *entry = mem_control->user_hash_table[i];
+				while (entry) {
+					User *user = entry->user;
+					remaining = sizeof(global_buf) - used;
+					written = snprintf(global_buf + used, remaining, "%s: %s\n", user->username, user->logged_in ? "++ ONLINE ++" : "-- OFFLINE -- ");
+					if (written < 0 || (size_t)written >= remaining) {
+						fprintf(stderr, "users_handle: Buffer overflow prevented\n");
+						break;
+					}
+					used += written;
+					entry = entry->next;
 				}
-				used += written;
-				entry = entry->next;
 			}
 		}
-		pthread_mutex_unlock(&mem_control->mutex);
+		MUTEX_UNLOCK;
 	}
+	global_buf[sizeof(global_buf) - 1] = '\0';
 	dprintf(cli->s, "%s\n", global_buf);
 	return 0;
 }
@@ -665,14 +708,12 @@ int32 classify_handle(Client *cli, char *file_name, char *unused) {
 	Leaf *leaf = find_leaf_by_hash(file_name);
 	if (!leaf || leaf->type != VALUE_STRING) {
 		dprintf(cli->s, "Invalid or not a string file\n");
-		pthread_mutex_unlock(&mem_control->mutex);
 		return 1;
 	}
 	SentimentLabel label = classify_text(leaf->value.string);
 	zero(global_buf, sizeof(global_buf));
 	snprintf(global_buf, sizeof(global_buf), "Sentiment: %s\n", label == POSITIVE ? "POSITIVE" : "NEGATIVE");
 	dprintf(cli->s, "%s\n", global_buf);
-	
 	return 0;	
 }
 
@@ -719,25 +760,30 @@ int32 banish_handle(Client *cli, char *username, char *unused) {
 	}
 	User *user = find_user(username);
 	if (!user) {
-		dprintf(cli->s, "User does not exist\n");
+		dprintf(cli->s, "User %s does not exist\n", username);
 		return 1;
 	}
-	if (delete_user(user)) {
-		dprintf(cli->s, "Unable to delete user %s\n", username);
-		return 1;
+	Client *client = find_client(username);
+	if (!client) {
+		dprintf(cli->s, "User %s not logged in\n", username);
+	} else {
+		if (!complete_client_logout(client)) {
+			dprintf(cli->s, "User %s force logout successful\n", username);
+		}
 	}
+	delete_user(user);
 	dprintf(cli->s, "User %s successfully banished\n", username);
 	return 0;
 }
 
 int32 boot_handle(Client *cli, char *username, char *unused) {
 	if (verify_admin(cli)) return 1;
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
 	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
 		ClientHashEntry *entry = mem_control->logged_in_clients[i];
 		while (entry) {
 			if (strcmp(entry->client->username, username) == 0) {
-				pthread_mutex_unlock(&mem_control->mutex);
+				MUTEX_UNLOCK;
 				if (complete_client_logout(entry->client)) {
 					dprintf(cli->s, "Invalid user %s, boot unsuccessful\n", username);
 					return 1;
@@ -748,7 +794,7 @@ int32 boot_handle(Client *cli, char *username, char *unused) {
 			entry = entry->next;
 		}
 	}
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
 	dprintf(cli->s, "User '%s' not found\n", username);
 	return 1;
 }
@@ -849,9 +895,10 @@ void child_loop(Client *cli) {
 		if (complete_client_logout(cli)) {
 			fprintf(stderr, "Invalid user %s, force logout unsuccessful\n", cli->username);
 		}
-		fprintf(stderr, "Client %s force logout successful\n", cli->username);
+		fprintf(stderr, "Client force logout successful\n");
 	}
 	close(cli->s);
+	fprintf(stderr, "End of child_loop User count: %zu\n", mem_control->user_count);
 }
 
 Client *build_client_struct() {
@@ -886,13 +933,13 @@ int cli_accept_cli(Client *client, int serv_fd) {
                 keep_running = 0;
 		return 1;
         }
-	pthread_mutex_lock(&mem_control->mutex);
+	MUTEX_LOCK;
         mem_control->active_connections++;
-	pthread_mutex_unlock(&mem_control->mutex);
+	MUTEX_UNLOCK;
 	
 	cli_port = (int16)htons((int)cli_addr.sin_port);
 	cli_ip = inet_ntoa(cli_addr.sin_addr);
-	printf("Connection from %s:%d\n", cli_ip, cli_port);
+	fprintf(stderr, "Connection from %s:%d\n", cli_ip, cli_port);
 
 	client->s = cli_fd;
 	client->port = cli_port;
@@ -912,7 +959,7 @@ int start_nexus_app(int serv_fd) {
 			fprintf(stderr, "start_cli_app() failure\n");
 			continue;
 		}
-		printf("Incoming connection (%ld/%d)\n", mem_control->active_connections, MAX_CONNECTIONS);
+		fprintf(stderr, "Incoming connection (%ld/%d)\n", mem_control->active_connections, MAX_CONNECTIONS);
 
 		if (!fork()) {
 			close(serv_fd);
@@ -922,23 +969,16 @@ int start_nexus_app(int serv_fd) {
 				dprintf(client->s, "Connected to server\nType 'help' for all available commands\n");
 			}
 			child_loop(client);
-			pthread_mutex_lock(&mem_control->mutex);
+			MUTEX_LOCK;
 			mem_control->active_connections--;
-			pthread_mutex_unlock(&mem_control->mutex);
+			MUTEX_UNLOCK;
 			exit(0);
 		}
 		close(cli_fd);
 	}
-			
+	fprintf(stderr, "End of start_nexus_app User count: %zu\n", mem_control->user_count);
 	fprintf(stderr, "Shutting down Node Nexus\n");			
 	return 0;
-}
-
-void client_hash_table_init() {
-	pthread_mutex_lock(&mem_control->mutex);
-	zero((void *)mem_control->logged_in_clients, sizeof(mem_control->logged_in_clients));
-	mem_control->logged_in_client_count = 0;
-	pthread_mutex_unlock(&mem_control->mutex);
 }
 
 int init_mem_control() {
@@ -978,7 +1018,9 @@ int init_root() {
 		return 1;
 	}
 	create_admin_user();
+	MUTEX_LOCK;
 	mem_control->dirty = 0;
+	MUTEX_UNLOCK;
 	return 0;
 }
 int main(int argc, char *argv[]) {
@@ -1001,6 +1043,7 @@ int main(int argc, char *argv[]) {
 	serv_fd = start_server(HOST, port);
 	start_nexus_app(serv_fd);	
 	close_server(serv_fd);
+	fprintf(stderr, "After close_server User count: %zu\n", mem_control->user_count);
 	cleanup_database();
 	base64_cleanup();
 	fprintf(stderr, "Exiting program...\n");

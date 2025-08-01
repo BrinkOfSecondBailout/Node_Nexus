@@ -34,7 +34,10 @@
 #define MAX_USERS 100
 #define MAX_PASSWORD_LEN 40
 
-#define PRINT_CHECK()			fprintf(stderr, "CHECK_POINT\n");
+#define PRINT_CHECK			fprintf(stderr, "CHECK_POINT\n")
+#define MUTEX_LOCK			pthread_mutex_lock(&mem_control->mutex)
+#define MUTEX_UNLOCK			pthread_mutex_unlock(&mem_control->mutex)
+
 #define CONCAT_PATH(dest, parent_path, child_path, max_len)			\
 	do {									\
 		if (strcmp((parent_path), "/") == 0)				\
@@ -172,6 +175,7 @@ void zero(void *, size_t);
 void node_hash_table_init();
 void leaf_hash_table_init();
 void user_hash_table_init();
+void client_hash_table_init();
 Node *find_node_by_hash(char *);
 Leaf *find_leaf_by_hash(char *);
 void print_tree(int, Node *);

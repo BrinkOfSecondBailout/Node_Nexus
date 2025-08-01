@@ -99,6 +99,7 @@ Run `help` to see all commands with examples. Key commands include:
   - `users`: List all users with online/offline status.
   - `boot <user>`: Force logout user (e.g., `boot alice`).
   - `boot_all`: Force logout all users.
+  - `banish <user>`: Delete user.
   - `classify <file_name>`: Use AI to analyze a text file to guage sentiment (beta mode) (e.g., `classify diary.txt`).
   - `nuke`: Delete all files and directories.
 

@@ -1,0 +1,11 @@
+Successfully registered and logged in as user 'danny'
+Logged out successfully
+Successfully registered and logged in as user 'daniel'
+Added new directory 'media' in current folder '/'
+Enter string:
+Successfully created new file 'monday' in folder '/media'
+Successfully created new file 'icon.png' in folder '/media'
+Back to root directory '/'
+Added new directory 'misc' in current folder '/'
+Added new directory 'randoms' in current folder '/misc'
+Bye now!
