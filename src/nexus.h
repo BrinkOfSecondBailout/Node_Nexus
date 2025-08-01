@@ -18,6 +18,9 @@
 #include <sys/mman.h>
 #include <poll.h>
 
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic push
+
 #define PORT				"8000"
 #define HOST				"127.0.0.1"
 #define MAX_FILE_UPLOAD			1048576 //1MB
@@ -57,7 +60,7 @@ int32 jump_handle(Client *, char *, char *);
 int32 addfile_handle(Client *, char *, char *);
 int32 open_handle(Client *, char *, char *);
 int32 save_handle(Client *, char *, char *);
-int32 kill_handle(Client *, char *, char *);
+int32 destroy_handle(Client *, char *, char *);
 int32 classify_handle(Client *, char *, char *);
 int32 banish_handle(Client *, char *, char *);
 int32 nuke_handle(Client *, char *, char *);

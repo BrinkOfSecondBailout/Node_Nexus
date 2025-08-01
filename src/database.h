@@ -31,7 +31,7 @@
 #define MAX_BASE64_LEN 1048576 //1MB
 #define SHARED_MEM_INITIAL_SIZE 1024 * 1024 //1MB
 #define MAX_USERNAME_LEN 32
-#define MAX_USERS 100
+#define MAX_USERS 20
 #define MAX_PASSWORD_LEN 40
 
 #define PRINT_CHECK			fprintf(stderr, "CHECK_POINT\n")
@@ -196,6 +196,7 @@ void print_node(int, Node *);
 void print_leaf(int, Leaf *);
 int delete_node(Node *);
 int delete_leaf(char *);
+void init_database();
 void reset_database();
 void cleanup_database(void);
 int init_saved_database();

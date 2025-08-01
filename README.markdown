@@ -92,7 +92,7 @@ Run `help` to see all commands with examples. Key commands include:
   - `addfile <dir> <file> <type> <value>`: Add a file (e.g., `addfile curr wonderland -f alice.png`).
   - `open <file_name>`: View a file (e.g., `open test.txt`).
   - `save <file_name>`: Download a binary file (e.g., `save data.bin`).
-  - `kill -<flag> <name>`: Delete a file (`-f`) or directory (`-d`) (e.g., `kill -f test.txt`).
+  - `destroy -<flag> <name>`: Delete a file (`-f`) or directory (`-d`) (e.g., `destroy -f test.txt`).
   - `exit`: Exit the client.
 
 - **Admin Commands** (requires `admin` login):

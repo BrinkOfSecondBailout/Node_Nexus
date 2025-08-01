@@ -2,7 +2,7 @@
 #include "nexus.h"
 
 Node *curr_node = NULL;
-static char global_buf[2048];
+static char global_buf[2148];
 volatile int keep_running_child = 1;
 
 Command_Handler c_handlers[] = {
@@ -21,7 +21,7 @@ Command_Handler c_handlers[] = {
 	{ (char *)"addfile", addfile_handle },
 	{ (char *)"open", open_handle },
 	{ (char *)"save", save_handle },
-	{ (char *)"kill", kill_handle },
+	{ (char *)"destroy", destroy_handle },
 	{ (char *)"classify", classify_handle },
 	{ (char *)"nuke", nuke_handle },
 	{ (char *)"banish", banish_handle },
@@ -72,15 +72,6 @@ int add_logged_in_cli(Client *cli) {
 		fprintf(stderr, "add_logged_in_cli() Invalid or empty username\n");
 		return 1;
 	}
-	/*
-	MUTEX_LOCK;
-	if (mem_control->active_connections >= MAX_CONNECTIONS) {
-		fprintf(stderr, "Maximum client connections breached\n");
-		MUTEX_UNLOCK;
-		return 1;
-	}
-	MUTEX_UNLOCK;
-	*/
 
 	uint32_t index = HASH_KEY(cli->username, MAX_CONNECTIONS);
 	ClientHashEntry *entry = alloc_shared(sizeof(ClientHashEntry));
@@ -199,14 +190,14 @@ int32 help_handle(Client *cli, char *unused1, char *unused2) {
 		       "		  I am feeling great today! Carpe diem!\n"
                        "  		  addfile logs friday -i 13\n"
                        "  		  addfile img titan -f ~/downloads/eren.png\n"
-                       "open <name>    				Open a folder or file by name\n"
+                       "open <name>    				Open a folder or file by name (may be truncated for viewing)\n"
                        "  	#Example: open test.txt\n"
-                       "save <file_name>    			Download a binary file\n"
+                       "save <file_name>    			Download a binary file (full and non-truncated)\n"
                        "  	#Example: save data.bin\n"
-                       "kill -<flag> <name> 			Delete a file or directory\n"
+                       "destroy -<flag> <name> 			Delete a file or directory\n"
                        "  	<flag>: -d (directory), -f (file)\n"
-                       "  	#Example: kill -f test.txt\n"
-                       "  		  kill -d images\n"
+                       "  	#Example: destroy -f test.txt\n"
+                       "  		  destroy -d images\n"
                        "exit                			Exit the program\n\n");
 	WRITE_GLOBAL_BUF("Admin Commands (Admin Only):\n"
                        "----------------------------\n"
@@ -577,7 +568,7 @@ int32 save_handle(Client *cli, char *key, char *unused) {
 	return 0;
 }
 
-int32 kill_handle(Client *cli, char *flag, char *name) {
+int32 destroy_handle(Client *cli, char *flag, char *name) {
 	if (verify_logged_in(cli)) return 1;
 	if (strcmp(flag, "-d") && strcmp(flag, "-f")) {
 		dprintf(cli->s, "Invalid flag, use -d for directory or -f for file\n");
@@ -730,7 +721,9 @@ int32 nuke_handle(Client *cli, char *unused1, char *unused2) {
 			return 1;
 		}
 		curr_node = root;
-		
+		MUTEX_LOCK;
+		mem_control->dirty = 1;	
+		MUTEX_UNLOCK;
 		dprintf(cli->s, "All files and folders successfully nuked\n");
 		return 0;
 	} else if (!strcmp(buffer, "N") || !strcmp(buffer, "n") || !strcmp(buffer, "No") || !strcmp(buffer, "no")) {
@@ -999,8 +992,9 @@ int init_mem_control() {
 	pthread_mutexattr_destroy(&attr);
 	return 0;
 }
+
 int init_root() {
-	reset_database();
+	init_database();
 	root = create_root_node();
 	if (!root) {
 		fprintf(stderr, "create_root_node() failure\n");
@@ -1014,6 +1008,7 @@ int init_root() {
 	MUTEX_UNLOCK;
 	return 0;
 }
+
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
 	verify_database("database.dat");
@@ -1041,3 +1036,6 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "Exiting program...\n");
 	return 0;
 }
+
+
+#pragma GCC diagnostic pop

@@ -30,6 +30,7 @@ void *alloc_shared(size_t size) {
 
 void zero(void *buf, size_t size) {
 	memset(buf, 0, size);
+	return;
 }
 
 void node_hash_table_init() {
@@ -37,6 +38,8 @@ void node_hash_table_init() {
 	zero((void*)mem_control->node_hash_table, (size_t)sizeof(mem_control->node_hash_table));
 	mem_control->node_count = 0;
 	MUTEX_UNLOCK;
+	fprintf(stderr, "Node hash table successfully zero'ed\n");
+	return;
 }
 
 void leaf_hash_table_init() {
@@ -44,6 +47,8 @@ void leaf_hash_table_init() {
 	zero((void *)mem_control->leaf_hash_table, (size_t)sizeof(mem_control->leaf_hash_table));
 	mem_control->leaf_count = 0;
 	MUTEX_UNLOCK;
+	fprintf(stderr, "Leaf hash table successfully zero'ed\n");
+	return;
 }
 
 void user_hash_table_init() {
@@ -51,6 +56,8 @@ void user_hash_table_init() {
 	zero((void *)mem_control->user_hash_table, (size_t)sizeof(mem_control->user_hash_table));
 	mem_control->user_count = 0;
 	MUTEX_UNLOCK;
+	fprintf(stderr, "User hash table successfully zero'ed\n");
+	return;
 }
 
 void client_hash_table_init() {
@@ -58,6 +65,8 @@ void client_hash_table_init() {
 	zero((void *)mem_control->logged_in_clients, sizeof(mem_control->logged_in_clients));
 	mem_control->logged_in_client_count = 0;
 	MUTEX_UNLOCK;
+	fprintf(stderr, "Client hash table successfully zero'ed\n");
+	return;
 }
 
 static char *indent(int8 n) {
@@ -613,6 +622,7 @@ void print_node(int cli_fd, Node *node) {
 void print_leaf(int cli_fd, Leaf *l) {
 	char header[512];
 	char body[MAX_BASE64_LEN];
+	const int truncate_limit = 50;
 	if (!l) {
 		dprintf(cli_fd, "Invalid file\n");
 		fprintf(stderr, "Invalid file\n");
@@ -628,7 +638,6 @@ void print_leaf(int cli_fd, Leaf *l) {
 			break;
 		case VALUE_BINARY:
 			if (l->value.binary.compressed) {
-				// Decompress for display
 				uLongf uncompressed_size = MAX_BASE64_LEN * 3 / 4;
 				unsigned char *uncompressed_data = malloc(uncompressed_size);
 				if (!uncompressed_data) {
@@ -642,7 +651,16 @@ void print_leaf(int cli_fd, Leaf *l) {
 					if (!encoded) {
 						snprintf(body, sizeof(body), "Base64 encoding failed\n");
 					} else {
-						snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n", uncompressed_size, encoded);
+						if (uncompressed_size <= truncate_limit) {
+							snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n\n", 
+									uncompressed_size, encoded);
+						} else {
+							char truncated[truncate_limit + 1];
+							strncpy(truncated, encoded, truncate_limit);
+							truncated[truncate_limit] = '\0';
+							snprintf(body, sizeof(body), "[binary data, size=%ld, TRUNCATED base64=%s...]\n\n",
+									uncompressed_size, truncated);	
+						}
 						free(encoded);
 					}
 					free(uncompressed_data);
@@ -656,7 +674,16 @@ void print_leaf(int cli_fd, Leaf *l) {
 					if (!encoded) {
 						snprintf(body, sizeof(body), "Base64 encoding failed\n");
 					} else {
-						snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n", l->value.binary.size, encoded);
+						if (l->value.binary.size <= truncate_limit) {
+							snprintf(body, sizeof(body), "[binary data, size=%ld, base64=%s]\n\n", 
+								l->value.binary.size, encoded);
+						} else {
+							char truncated[truncate_limit + 1];
+							strncpy(truncated, encoded, truncate_limit);
+							truncated[truncate_limit] = '\0';
+							snprintf(body, sizeof(body), "[binary data, size=%ld, TRUNCATED base64=%s...]\n\n",
+								l->value.binary.size, truncated);
+						}
 						free(encoded);
 					}
 				}
@@ -835,7 +862,7 @@ int delete_leaf(char *name) {
 	return 1;
 }
 
-void reset_database() {
+void init_database() {
 	if (root) {
 		free_node(root);
 		root = NULL;
@@ -843,10 +870,17 @@ void reset_database() {
 	node_hash_table_init();
 	leaf_hash_table_init();
 	user_hash_table_init();
+	client_hash_table_init();
 	MUTEX_LOCK;
 	mem_control->shared_mem_used = 0;
 	mem_control->dirty = 1;
 	MUTEX_UNLOCK;
+	return;
+}
+
+void reset_database() {
+	node_hash_table_init();
+	leaf_hash_table_init();
 	return;
 }
 
@@ -933,14 +967,6 @@ void save_database(const char *filename) {
 		return;
 	}
 	MUTEX_LOCK;
-	/*
-	if (mem_control->user_count > 10) {
-		fprintf(stderr, "USER_COUNT FAILURE, COUNT=%zu\n", mem_control->user_count);
-		printf("USER_COUNT FAILURE, COUNT=%zu\n", mem_control->user_count);
-		MUTEX_UNLOCK;
-		return;
-	}
-	*/
 	if (fwrite(&mem_control->user_count, sizeof(size_t), 1, f) != 1) {
 		fprintf(stderr, "save_database() fwrite failure\n");
 		MUTEX_UNLOCK;
@@ -1256,7 +1282,6 @@ int init_saved_database(void) {
 void cleanup_database(void) {
 	MUTEX_LOCK;
 	if (mem_control->dirty == 1) {
-	//	fprintf(stderr, "In cleanup_database User Count: %zu\n", mem_control->user_count);
 		fprintf(stderr, "Database change detected, saving...\n");
 		MUTEX_UNLOCK;
 		save_database("database.dat");
@@ -1271,10 +1296,13 @@ void cleanup_database(void) {
 		root = NULL;
 	}
 	if (mem_control) {
+		init_database();
+		/*
 		node_hash_table_init();
 		leaf_hash_table_init();
 		user_hash_table_init();
 		client_hash_table_init();
+		*/
 		mem_control->dirty = 0;
 	}
 	if (mem_control && mem_control->shared_mem_pool) {
