@@ -742,11 +742,15 @@ void free_node(Node *node) {
 	Leaf *leaf = node->leaf;
 	while (leaf) {
 		Leaf *next = leaf->sibling;
+		MUTEX_UNLOCK;
 		free_leaf(leaf);
+		MUTEX_LOCK;
 		leaf = next;
 	}
 	if (node->child) {
+		MUTEX_UNLOCK;
 		free_node(node->child);
+		MUTEX_LOCK;
 	}
 	MUTEX_UNLOCK;
 	return;
@@ -953,7 +957,7 @@ void save_database(const char *filename) {
 			entry = entry->next;
 		}
 	}
-	fprintf(stderr, "save_database USER COUNT=%zu\n", mem_control->user_count);
+//	fprintf(stderr, "save_database USER COUNT=%zu\n", mem_control->user_count);
 	MUTEX_UNLOCK;
 	if (save_all_nodes(f)) {
 		fprintf(stderr, "save_database() save_all_nodes failed\n");
@@ -1077,14 +1081,6 @@ int load_database(const char *filename) {
 		fprintf(stderr, "load_database() fread usercount failure\n");
 		return 1;	
 	}
-	/*
-	if (mem_control->user_count > 10) {
-		fclose(f);
-		fprintf(stderr, "load_database ERROR USER COUNT=%zu\n", mem_control->user_count);
-		MUTEX_UNLOCK;
-		return 1;
-	}
-	*/
 	for (size_t i = 0; i < mem_control->user_count; i++) {
 		MUTEX_UNLOCK;
 		User *user = alloc_shared(sizeof(User));
@@ -1101,7 +1097,7 @@ int load_database(const char *filename) {
 		add_user_to_table(user, 0);
 		MUTEX_LOCK;
 	}
-	fprintf(stderr, "load_database USER COUNT=%zu\n", mem_control->user_count);
+//	fprintf(stderr, "load_database USER COUNT=%zu\n", mem_control->user_count);
 	MUTEX_UNLOCK;
 	root = load_node(f, NULL);
 	if (!root) {
@@ -1260,19 +1256,19 @@ int init_saved_database(void) {
 void cleanup_database(void) {
 	MUTEX_LOCK;
 	if (mem_control->dirty == 1) {
-		fprintf(stderr, "In cleanup_database User Count: %zu\n", mem_control->user_count);
+	//	fprintf(stderr, "In cleanup_database User Count: %zu\n", mem_control->user_count);
 		fprintf(stderr, "Database change detected, saving...\n");
 		MUTEX_UNLOCK;
 		save_database("database.dat");
+		MUTEX_LOCK;
 	} else {
 		fprintf(stderr, "Database unchanged\n");
 	}
+	mem_control->active_connections = 0;
 	MUTEX_UNLOCK;
-	if (mem_control && mem_control->shared_mem_pool) {
-		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
-		mem_control->shared_mem_pool = NULL;
-		mem_control->shared_mem_used = 0;
-		mem_control->shared_mem_size = 0;
+	if (root) {
+		free_node(root);
+		root = NULL;
 	}
 	if (mem_control) {
 		node_hash_table_init();
@@ -1280,11 +1276,19 @@ void cleanup_database(void) {
 		user_hash_table_init();
 		client_hash_table_init();
 		mem_control->dirty = 0;
+	}
+	if (mem_control && mem_control->shared_mem_pool) {
+		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
+		mem_control->shared_mem_pool = NULL;
+		mem_control->shared_mem_used = 0;
+		mem_control->shared_mem_size = 0;
+	}
+	if (mem_control) {
 		pthread_mutex_destroy(&mem_control->mutex);
 		munmap(mem_control, sizeof(SharedMemControl));
 		mem_control = NULL;
 	}
-	root = NULL;
+	fprintf(stderr, "Finished cleaning and freeing resources\n");
 	return;
 }
 

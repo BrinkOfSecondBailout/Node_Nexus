@@ -150,17 +150,11 @@ int complete_client_logout(Client *client) {
 	return 0;
 }
 
-void log_all_users_out(int cli_fd) {
+void logout_all_clients() {
 	MUTEX_LOCK;
-	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
-	dprintf(cli_fd, "Total logged in users: %ld\n", mem_control->logged_in_client_count);
 	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
 		ClientHashEntry *entry = mem_control->logged_in_clients[i];
 		while (entry) {
-			if (strcmp(entry->client->username, ADMIN_USERNAME) == 0) {
-				entry = entry->next;
-				continue;
-			}
 			MUTEX_UNLOCK;
 			complete_client_logout(entry->client);
 			MUTEX_LOCK;
@@ -264,12 +258,11 @@ int32 register_handle(Client *cli, char *username, char *password) {
 		dprintf(cli->s, "Registration failed: Username may already exist or server error\n");
 		return 1;
 	}
-	fprintf(stderr, "register_handle Count=%zu\n", mem_control->user_count);
 	cli->logged_in = 1;
 	user->logged_in = 1;
 	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 	add_logged_in_cli(cli);
-	fprintf(stderr, "register_handle Count=%zu\n", mem_control->user_count);
+//	fprintf(stderr, "register_handle Count=%zu\n", mem_control->user_count);
 	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
@@ -395,7 +388,7 @@ int32 newdir_handle(Client *cli, char *folder, char *unused) {
 	} else {
 		dprintf(cli->s, "Unsuccessful at creating new directory '%s' in current folder '%s'.. Please try again..\n", folder, curr_node->path);
 	}
-	fprintf(stderr, "End of newdir_handle User count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "End of newdir_handle User count: %zu\n", mem_control->user_count);
 	return 0;
 }
 
@@ -460,10 +453,8 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 	Leaf *leaf;
 	char *p = strtok(args, " ");
 	strncpy(name, p, sizeof(name) - 1);
-
 	p = strtok(NULL, " ");
 	strncpy(flag, p, sizeof(flag) - 1);
-	
 	if (!strcmp(flag, "-s")) {
 		zero(global_buf, sizeof(global_buf));
 		dprintf(cli->s, "Enter string:\n");
@@ -518,7 +509,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		return 1;
 	}
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
-	fprintf(stderr, "End of addfile_handle User count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "End of addfile_handle User count: %zu\n", mem_control->user_count);
 	return 0;	
 }
 
@@ -801,7 +792,7 @@ int32 boot_handle(Client *cli, char *username, char *unused) {
 
 int32 boot_all_handle(Client *cli, char *unused1, char *unused2) {
 	if (verify_admin(cli)) return 1;
-	log_all_users_out(cli->s);
+	logout_all_clients();
 	fprintf(stderr, "All logged in users booted\n");
 	dprintf(cli->s, "All logged in users booted\n");
 	return 0;
@@ -898,7 +889,7 @@ void child_loop(Client *cli) {
 		fprintf(stderr, "Client force logout successful\n");
 	}
 	close(cli->s);
-	fprintf(stderr, "End of child_loop User count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "End of child_loop User count: %zu\n", mem_control->user_count);
 }
 
 Client *build_client_struct() {
@@ -976,7 +967,7 @@ int start_nexus_app(int serv_fd) {
 		}
 		close(cli_fd);
 	}
-	fprintf(stderr, "End of start_nexus_app User count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "End of start_nexus_app User count: %zu\n", mem_control->user_count);
 	fprintf(stderr, "Shutting down Node Nexus\n");			
 	return 0;
 }
@@ -1043,7 +1034,8 @@ int main(int argc, char *argv[]) {
 	serv_fd = start_server(HOST, port);
 	start_nexus_app(serv_fd);	
 	close_server(serv_fd);
-	fprintf(stderr, "After close_server User count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "After close_server User count: %zu\n", mem_control->user_count);
+	logout_all_clients();
 	cleanup_database();
 	base64_cleanup();
 	fprintf(stderr, "Exiting program...\n");
