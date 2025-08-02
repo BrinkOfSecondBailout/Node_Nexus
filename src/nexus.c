@@ -362,7 +362,7 @@ int32 logout_handle(Client *cli, char *unused1, char *unused2) {
 }
 
 int32 tree_handle(Client *cli, char *unused1, char *unused2) {
-	print_tree(cli->s, root);
+	print_tree(cli->s, mem_control->root);
 	return 0;
 }
 
@@ -384,7 +384,7 @@ int32 newdir_handle(Client *cli, char *folder, char *unused) {
 }
 
 int32 back_handle(Client *cli, char *unused1, char *unused2) {
-	if (curr_node == root) {
+	if (curr_node == mem_control->root) {
 		dprintf(cli->s, "Already at root node '/'\n");
 	} else {
 		curr_node = curr_node->parent;
@@ -394,7 +394,7 @@ int32 back_handle(Client *cli, char *unused1, char *unused2) {
 }
 
 int32 root_handle(Client *cli, char *unused1, char *unused2) {
-	curr_node = root;
+	curr_node = mem_control->root;
 	dprintf(cli->s, "Back to root directory '/'\n");
 	return 0;
 }
@@ -431,7 +431,7 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		return 1;
 	}
 	Node *node;
-	if (!strcmp(folder, "curr")) {
+	if (strcmp(folder, "curr") == 0) {
 		node = curr_node;
 	} else {
 		node = find_node_by_hash(folder);
@@ -584,7 +584,7 @@ int32 destroy_handle(Client *cli, char *flag, char *name) {
 			dprintf(cli->s, "Invalid directory, '%s' not found\n", name);
 			return 1;
 		}
-		if (node == root) {
+		if (node == mem_control->root) {
 			dprintf(cli->s, "Cannot delete root directory\n");
 			return 1;
 		}
@@ -603,7 +603,7 @@ int32 destroy_handle(Client *cli, char *flag, char *name) {
 				dprintf(cli->s, "Unable to delete directory '%s'\n", name);
 				return 1;
 			}
-			curr_node = root;
+			curr_node = mem_control->root;
 			dprintf(cli->s, "Directory '%s' deleted\n", name);
 			return 0;
 		} else if (!strcmp(buffer, "N") || !strcmp(buffer, "n") || !strcmp(buffer, "No") || !strcmp(buffer, "no")) {
@@ -720,8 +720,10 @@ int32 nuke_handle(Client *cli, char *unused1, char *unused2) {
 			mem_control = NULL;
 			return 1;
 		}
-		curr_node = root;
 		MUTEX_LOCK;
+		mem_control->root = root;
+//		fprintf(stderr, "After nuke, root=%p\n", mem_control->root);
+		curr_node = mem_control->root;
 		mem_control->dirty = 1;	
 		MUTEX_UNLOCK;
 		dprintf(cli->s, "All files and folders successfully nuked\n");
@@ -952,6 +954,8 @@ int start_nexus_app(int serv_fd) {
 			if (ret <= 0 || !(pfd.revents & POLLIN)) {
 				dprintf(client->s, "Connected to server\nType 'help' for all available commands\n");
 			}
+			curr_node = mem_control->root;
+//			fprintf(stderr, "curr node=%p\n", curr_node);
 			child_loop(client);
 			MUTEX_LOCK;
 			mem_control->active_connections--;
@@ -971,6 +975,7 @@ int init_mem_control() {
 		fprintf(stderr, "mmap failed for mem_control: %s\n", strerror(errno));
 		return 1;
 	}	
+	mem_control->root = NULL;
 	mem_control->active_connections = 0;
 	mem_control->shared_mem_pool = NULL;
 	mem_control->shared_mem_size = 0;
@@ -1002,8 +1007,9 @@ int init_root() {
 		mem_control = NULL;
 		return 1;
 	}
-	create_admin_user();
 	MUTEX_LOCK;
+	mem_control->root = root;
+//	fprintf(stderr, "Initial root=%p\n", mem_control->root);
 	mem_control->dirty = 0;
 	MUTEX_UNLOCK;
 	return 0;
@@ -1015,8 +1021,8 @@ int main(int argc, char *argv[]) {
 	if (init_saved_database()) {
 		fprintf(stderr, "Initializing new database\n");
 		if (init_root()) return 1;
+		create_admin_user();
 	}
-	curr_node = root;
 	char *str_port;
 	int port;
 	int serv_fd;

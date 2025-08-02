@@ -84,4 +84,3 @@ Added new directory 'users' in current folder '/'
 /
 |---/users
 
-400 Read error: Interrupted system call

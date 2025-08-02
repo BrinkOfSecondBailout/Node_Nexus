@@ -38,7 +38,6 @@ void node_hash_table_init() {
 	zero((void*)mem_control->node_hash_table, (size_t)sizeof(mem_control->node_hash_table));
 	mem_control->node_count = 0;
 	MUTEX_UNLOCK;
-	fprintf(stderr, "Node hash table successfully zero'ed\n");
 	return;
 }
 
@@ -47,7 +46,6 @@ void leaf_hash_table_init() {
 	zero((void *)mem_control->leaf_hash_table, (size_t)sizeof(mem_control->leaf_hash_table));
 	mem_control->leaf_count = 0;
 	MUTEX_UNLOCK;
-	fprintf(stderr, "Leaf hash table successfully zero'ed\n");
 	return;
 }
 
@@ -56,7 +54,6 @@ void user_hash_table_init() {
 	zero((void *)mem_control->user_hash_table, (size_t)sizeof(mem_control->user_hash_table));
 	mem_control->user_count = 0;
 	MUTEX_UNLOCK;
-	fprintf(stderr, "User hash table successfully zero'ed\n");
 	return;
 }
 
@@ -65,7 +62,6 @@ void client_hash_table_init() {
 	zero((void *)mem_control->logged_in_clients, sizeof(mem_control->logged_in_clients));
 	mem_control->logged_in_client_count = 0;
 	MUTEX_UNLOCK;
-	fprintf(stderr, "Client hash table successfully zero'ed\n");
 	return;
 }
 
@@ -436,7 +432,7 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count)
 	CHECK_NULL(new->value.string, "create_new_leaf() malloc failed\n");
 	strncpy(new->value.string, value, count);
 	add_leaf_to_table(new);
-	fprintf(stderr, "User Count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "User Count: %zu\n", mem_control->user_count);
 	return new;
 }
 
@@ -472,7 +468,7 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	new->value.binary.size = compressed_size;
 	new->value.binary.compressed = 1;
 	add_leaf_to_table(new);
-	fprintf(stderr, "User Count: %zu\n", mem_control->user_count);
+//	fprintf(stderr, "User Count: %zu\n", mem_control->user_count);
 	return new;
 }
 
@@ -863,7 +859,7 @@ int delete_leaf(char *name) {
 }
 
 void init_database() {
-	if (root) {
+	if (mem_control->root) {
 		free_node(root);
 		root = NULL;
 	}
@@ -872,6 +868,7 @@ void init_database() {
 	user_hash_table_init();
 	client_hash_table_init();
 	MUTEX_LOCK;
+	mem_control->root = NULL;
 	mem_control->shared_mem_used = 0;
 	mem_control->dirty = 1;
 	MUTEX_UNLOCK;
@@ -879,6 +876,10 @@ void init_database() {
 }
 
 void reset_database() {
+	if (mem_control->root) {
+		free_node(root);
+		root = NULL;	
+	}
 	node_hash_table_init();
 	leaf_hash_table_init();
 	return;
@@ -956,7 +957,7 @@ int save_node(FILE *f, Node *node) {
 }
 
 int save_all_nodes(FILE *f) {
-	save_node(f, root);
+	save_node(f, mem_control->root);
 	return 0;	
 }
 
@@ -1132,6 +1133,9 @@ int load_database(const char *filename) {
 		return 1;
 	}
 	add_node_to_table(root);
+	MUTEX_LOCK;
+	mem_control->root = root;
+	MUTEX_UNLOCK;
 	fprintf(stderr, "Successfully loaded saved database from %s\n", filename);
 	fclose(f);
 	return 0;
@@ -1307,6 +1311,7 @@ void cleanup_database(void) {
 	}
 	if (mem_control && mem_control->shared_mem_pool) {
 		munmap(mem_control->shared_mem_pool, mem_control->shared_mem_size);
+		mem_control->root = NULL;
 		mem_control->shared_mem_pool = NULL;
 		mem_control->shared_mem_used = 0;
 		mem_control->shared_mem_size = 0;

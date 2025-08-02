@@ -151,6 +151,7 @@ struct s_user {
 };
 
 typedef struct SharedMemControl {
+	Node *root;
 	size_t active_connections;
 	void *shared_mem_pool;
 	size_t shared_mem_size;
