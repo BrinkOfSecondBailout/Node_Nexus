@@ -38,6 +38,10 @@
 #define MUTEX_LOCK			pthread_mutex_lock(&mem_control->mutex)
 #define MUTEX_UNLOCK			pthread_mutex_unlock(&mem_control->mutex)
 
+#define ATTACH_ROOT			pthread_mutex_lock(&mem_control->mutex);\
+					root = mem_control->root;		\
+					pthread_mutex_unlock(&mem_control->mutex)
+
 #define CONCAT_PATH(dest, parent_path, child_path, max_len)			\
 	do {									\
 		if (strcmp((parent_path), "/") == 0)				\

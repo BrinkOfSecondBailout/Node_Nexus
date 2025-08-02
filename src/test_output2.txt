@@ -1,0 +1,27 @@
+Successfully registered and logged in as user 'gustavo'
+Logged out successfully
+Successfully logged in as 'danny'
+Added new directory 'images' in current folder '/'
+Back to root directory '/'
+Added new directory 'users' in current folder '/images'
+Enter string:
+Successfully created new file 'users_log' in folder '/images/users'
+Found and currently in folder '/images'
+Successfully created new file 'icon.png' in folder '/images'
+Back to root directory '/'
+
+== FILE ==
+
+Path: /images/users
+Name: users_log
+Content:
+danny gustavo lindsey nick daniel shawn irv
+
+== FILE ==
+
+Path: /images
+Name: icon.png
+Content:
+[binary data, size=15320, TRUNCATED base64=iVBORw0KGgoAAAANSUhEUgAABAAAAAQACAMAAABIw9uxAAAAGX...]
+
+Bye now!

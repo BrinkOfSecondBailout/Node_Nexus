@@ -122,7 +122,7 @@ fi
     sleep 0.5
     echo "tree"
     sleep 0.5
-    #echo "exit"
+    echo "exit"
 } | nc $HOST $PORT | tee $OUTPUT_FILE
 
 # Optionally stop the server if started by the script

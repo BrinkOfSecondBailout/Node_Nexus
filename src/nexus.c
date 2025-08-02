@@ -35,9 +35,9 @@ void print_cli(Client *client) {
 }
 
 void print_all_logged_in_cli() {
-	MUTEX_LOCK;
 	ClientHashEntry *entry;
 	Client *client;
+	MUTEX_LOCK;
 	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
 	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
 		entry = mem_control->logged_in_clients[i];
@@ -253,7 +253,6 @@ int32 register_handle(Client *cli, char *username, char *password) {
 	user->logged_in = 1;
 	strncpy(cli->username, username, MAX_USERNAME_LEN - 1);
 	add_logged_in_cli(cli);
-//	fprintf(stderr, "register_handle Count=%zu\n", mem_control->user_count);
 	dprintf(cli->s, "Successfully registered and logged in as user '%s'\n", username);
 	return 0;
 }
@@ -362,7 +361,8 @@ int32 logout_handle(Client *cli, char *unused1, char *unused2) {
 }
 
 int32 tree_handle(Client *cli, char *unused1, char *unused2) {
-	print_tree(cli->s, mem_control->root);
+	ATTACH_ROOT;
+	print_tree(cli->s, root);
 	return 0;
 }
 
@@ -379,12 +379,12 @@ int32 newdir_handle(Client *cli, char *folder, char *unused) {
 	} else {
 		dprintf(cli->s, "Unsuccessful at creating new directory '%s' in current folder '%s'.. Please try again..\n", folder, curr_node->path);
 	}
-//	fprintf(stderr, "End of newdir_handle User count: %zu\n", mem_control->user_count);
 	return 0;
 }
 
 int32 back_handle(Client *cli, char *unused1, char *unused2) {
-	if (curr_node == mem_control->root) {
+	ATTACH_ROOT;
+	if (curr_node == root) {
 		dprintf(cli->s, "Already at root node '/'\n");
 	} else {
 		curr_node = curr_node->parent;
@@ -394,7 +394,7 @@ int32 back_handle(Client *cli, char *unused1, char *unused2) {
 }
 
 int32 root_handle(Client *cli, char *unused1, char *unused2) {
-	curr_node = mem_control->root;
+	ATTACH_ROOT;
 	dprintf(cli->s, "Back to root directory '/'\n");
 	return 0;
 }
@@ -500,7 +500,6 @@ int32 addfile_handle(Client *cli, char *folder, char *args) {
 		return 1;
 	}
 	dprintf(cli->s, "Successfully created new file '%s' in folder '%s'\n", name, node->path);
-//	fprintf(stderr, "End of addfile_handle User count: %zu\n", mem_control->user_count);
 	return 0;	
 }
 
@@ -580,11 +579,12 @@ int32 destroy_handle(Client *cli, char *flag, char *name) {
 	}
 	if (!strcmp(flag, "-d")) {
 		Node *node = find_node_by_hash(name);
+		ATTACH_ROOT;
 		if (!node) {
 			dprintf(cli->s, "Invalid directory, '%s' not found\n", name);
 			return 1;
 		}
-		if (node == mem_control->root) {
+		if (node == root) {
 			dprintf(cli->s, "Cannot delete root directory\n");
 			return 1;
 		}
@@ -603,7 +603,8 @@ int32 destroy_handle(Client *cli, char *flag, char *name) {
 				dprintf(cli->s, "Unable to delete directory '%s'\n", name);
 				return 1;
 			}
-			curr_node = mem_control->root;
+			ATTACH_ROOT;
+			curr_node = root;
 			dprintf(cli->s, "Directory '%s' deleted\n", name);
 			return 0;
 		} else if (!strcmp(buffer, "N") || !strcmp(buffer, "n") || !strcmp(buffer, "No") || !strcmp(buffer, "no")) {
@@ -642,10 +643,6 @@ int32 users_handle(Client *cli, char *unused1, char *unused2) {
 	size_t used = 0;
 	int written = 0;
 	if (user_count == 0) {
-		/*
-		strncpy(global_buf, "No registered users currently..\n", sizeof(global_buf));
-		global_buf[sizeof(global_buf) - 1] = '\0';
-		*/
 		char *s = "No registered users yet...";
 		written = snprintf(global_buf + used, remaining, "%s\n", s);
 		if (written < 0) {
@@ -716,13 +713,10 @@ int32 nuke_handle(Client *cli, char *unused1, char *unused2) {
 		root = create_root_node();
 		if (!root) {
 			fprintf(stderr, "create_root_node() failure\n");
-			munmap(mem_control, sizeof(SharedMemControl));
-			mem_control = NULL;
 			return 1;
 		}
 		MUTEX_LOCK;
 		mem_control->root = root;
-//		fprintf(stderr, "After nuke, root=%p\n", mem_control->root);
 		curr_node = mem_control->root;
 		mem_control->dirty = 1;	
 		MUTEX_UNLOCK;
@@ -867,7 +861,7 @@ void child_loop(Client *cli) {
 				strncpy(args, p, sizeof(args) - 1);
 			}
 		}
-		// dprintf(cli->s, "\ncmd: %s\nfolder: %s\nargs: %s\n", cmd, folder, args);
+		fprintf(stderr, "%s %s %s\n", cmd, folder, args);
 		Callback cb = get_command((int8 *)cmd);
 		if (!cb) {
 			dprintf(cli->s, "400 Command not found: %s\n", cmd);
@@ -884,7 +878,6 @@ void child_loop(Client *cli) {
 		fprintf(stderr, "Client force logout successful\n");
 	}
 	close(cli->s);
-//	fprintf(stderr, "End of child_loop User count: %zu\n", mem_control->user_count);
 }
 
 Client *build_client_struct() {
@@ -954,8 +947,9 @@ int start_nexus_app(int serv_fd) {
 			if (ret <= 0 || !(pfd.revents & POLLIN)) {
 				dprintf(client->s, "Connected to server\nType 'help' for all available commands\n");
 			}
+			MUTEX_LOCK;
 			curr_node = mem_control->root;
-//			fprintf(stderr, "curr node=%p\n", curr_node);
+			MUTEX_UNLOCK;
 			child_loop(client);
 			MUTEX_LOCK;
 			mem_control->active_connections--;
@@ -964,7 +958,6 @@ int start_nexus_app(int serv_fd) {
 		}
 		close(cli_fd);
 	}
-//	fprintf(stderr, "End of start_nexus_app User count: %zu\n", mem_control->user_count);
 	fprintf(stderr, "Shutting down Node Nexus\n");			
 	return 0;
 }
@@ -1009,7 +1002,6 @@ int init_root() {
 	}
 	MUTEX_LOCK;
 	mem_control->root = root;
-//	fprintf(stderr, "Initial root=%p\n", mem_control->root);
 	mem_control->dirty = 0;
 	MUTEX_UNLOCK;
 	return 0;
@@ -1035,7 +1027,6 @@ int main(int argc, char *argv[]) {
 	serv_fd = start_server(HOST, port);
 	start_nexus_app(serv_fd);	
 	close_server(serv_fd);
-//	fprintf(stderr, "After close_server User count: %zu\n", mem_control->user_count);
 	logout_all_clients();
 	cleanup_database();
 	base64_cleanup();

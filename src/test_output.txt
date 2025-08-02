@@ -5,14 +5,14 @@ Logged out successfully
 Successfully logged in as 'danny'
 Added new directory 'media' in current folder '/'
 Back to root directory '/'
-Added new directory 'journals' in current folder '/'
+Added new directory 'journals' in current folder '/media'
 Enter string:
-Successfully created new file 'monday' in folder '/journals'
+Successfully created new file 'monday' in folder '/media/journals'
 Found and currently in folder '/media'
 Successfully created new file 'icon.png' in folder '/media'
 Back to root directory '/'
-Added new directory 'misc' in current folder '/'
-Added new directory 'randoms' in current folder '/misc'
+Added new directory 'misc' in current folder '/media'
+Added new directory 'randoms' in current folder '/media/misc'
 Credentials passed, please enter new password
 Password successfully changed for 'daniel'
 Logged out successfully
@@ -20,7 +20,7 @@ Successfully logged in as 'daniel'
 
 == FILE ==
 
-Path: /journals
+Path: /media/journals
 Name: monday
 Content:
 I am very happy today
@@ -70,10 +70,10 @@ Sentiment: POSITIVE
 /
 |---/media
 |---/media/..icon.png -> [binary data, size = 14423]
+|-------/media/misc
+|-----------/media/misc/randoms
 |---/journals
 |---/journals/..monday -> I am very happy today
-|---/misc
-|-------/misc/randoms
 
 This will delete all files and folders, proceed?
 ~ Y/N ~
@@ -84,3 +84,4 @@ Added new directory 'users' in current folder '/'
 /
 |---/users
 
+Bye now!

@@ -304,7 +304,6 @@ static void add_user_to_table(User *user, int increment_count) {
 	if (increment_count) {
 		mem_control->user_count++;
 	}
-//	fprintf(stderr, "add_user_to_table USER COUNT=%zu\n", mem_control->user_count);
 	MUTEX_UNLOCK;
 	return;
 }
@@ -432,7 +431,6 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count)
 	CHECK_NULL(new->value.string, "create_new_leaf() malloc failed\n");
 	strncpy(new->value.string, value, count);
 	add_leaf_to_table(new);
-//	fprintf(stderr, "User Count: %zu\n", mem_control->user_count);
 	return new;
 }
 
@@ -468,7 +466,6 @@ Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	new->value.binary.size = compressed_size;
 	new->value.binary.compressed = 1;
 	add_leaf_to_table(new);
-//	fprintf(stderr, "User Count: %zu\n", mem_control->user_count);
 	return new;
 }
 
@@ -859,10 +856,12 @@ int delete_leaf(char *name) {
 }
 
 void init_database() {
+	MUTEX_LOCK;
 	if (mem_control->root) {
 		free_node(root);
 		root = NULL;
 	}
+	MUTEX_UNLOCK;
 	node_hash_table_init();
 	leaf_hash_table_init();
 	user_hash_table_init();
@@ -957,7 +956,9 @@ int save_node(FILE *f, Node *node) {
 }
 
 int save_all_nodes(FILE *f) {
+	MUTEX_LOCK;
 	save_node(f, mem_control->root);
+	MUTEX_UNLOCK;
 	return 0;	
 }
 
@@ -984,7 +985,6 @@ void save_database(const char *filename) {
 			entry = entry->next;
 		}
 	}
-//	fprintf(stderr, "save_database USER COUNT=%zu\n", mem_control->user_count);
 	MUTEX_UNLOCK;
 	if (save_all_nodes(f)) {
 		fprintf(stderr, "save_database() save_all_nodes failed\n");
@@ -1124,7 +1124,6 @@ int load_database(const char *filename) {
 		add_user_to_table(user, 0);
 		MUTEX_LOCK;
 	}
-//	fprintf(stderr, "load_database USER COUNT=%zu\n", mem_control->user_count);
 	MUTEX_UNLOCK;
 	root = load_node(f, NULL);
 	if (!root) {
@@ -1295,18 +1294,12 @@ void cleanup_database(void) {
 	}
 	mem_control->active_connections = 0;
 	MUTEX_UNLOCK;
-	if (root) {
-		free_node(root);
+	if (mem_control->root) {
+		free_node(mem_control->root);
 		root = NULL;
 	}
 	if (mem_control) {
 		init_database();
-		/*
-		node_hash_table_init();
-		leaf_hash_table_init();
-		user_hash_table_init();
-		client_hash_table_init();
-		*/
 		mem_control->dirty = 0;
 	}
 	if (mem_control && mem_control->shared_mem_pool) {
