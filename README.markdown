@@ -48,7 +48,7 @@ sudo apt install build-essential libz-dev libssl-dev
 
 2. Compile the server:
    ```bash
-   gcc -o nexus nexus.c database.c myserver.c classifier.c -lz -pthread -lcrypto -lm
+   gcc -o nexus nexus.c database.c myserver.c base64.c classifier.c -lz -pthread -lcrypto -lm
    ```
 
 3. Set the admin password environment variable:
