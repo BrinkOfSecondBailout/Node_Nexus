@@ -67,6 +67,20 @@ sudo apt install build-essential libz-dev libssl-dev
    ```
    If not specified, default port is defined in `myserver.c`. Example: `./node_nexus 8080`
 
+## Testing (Sample run)
+
+Open up a separate bash window, run the test run and review all responses and outputs to test-output.txt (This test assumes you are running on port 8080, modify in file if needed)
+
+````bash
+sudo chmod -x test_nexus.sh
+./test_nexus.sh
+````
+Open up a second bash window and run another test run
+````bash
+sudo chmod -x test_nexus2.sh
+./test_nexus2.sh
+````
+
 ## Usage
 
 Connect to the server using a client like `telnet` or `nc` (default port set at 8000 unless customized otherwise):
