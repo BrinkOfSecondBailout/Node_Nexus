@@ -2,7 +2,7 @@
 
 # Configuration
 HOST="localhost"
-PORT=8080  # Adjust if you use a different port
+PORT=8000  # Adjust if you use a different port
 SERVER_PID=""
 OUTPUT_FILE="test_output2.txt"
 

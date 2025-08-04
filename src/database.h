@@ -51,11 +51,19 @@
 					(parent_path), (child_path));		\
 	} while (0)
 
-#define CHECK_NULL(ptr, err_message)						\
+#define CHECK_NULL_RETURN_NULL(ptr, err_message)						\
 	do {									\
 		if (!(ptr)) {							\
 			fprintf(stderr, "%s\n", err_message);			\
 			return NULL;						\
+		}								\
+	} while (0)
+
+#define CHECK_NULL_RETURN_VOID(ptr, err_message)						\
+	do {									\
+		if (!(ptr)) {							\
+			fprintf(stderr, "%s\n", err_message);			\
+			return;						\
 		}								\
 	} while (0)
 

@@ -23,7 +23,7 @@ void *alloc_shared(size_t size) {
 	}
 	void *ptr = (char *)mem_control->shared_mem_pool + mem_control->shared_mem_used;
 	mem_control->shared_mem_used += size;
-//	fprintf(stderr, "PID: %d: Mempool size: %ld\n", getpid(), mem_control->shared_mem_used);
+//	fprintf(stdout, "PID: %d: Mempool size: %ld\n", getpid(), mem_control->shared_mem_used);
 	MUTEX_UNLOCK;
 	return ptr;
 }
@@ -90,7 +90,7 @@ static int write_str(int fd, const char *str) {
 }
 static void print_original_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
-	if (!n) return;
+	CHECK_NULL_RETURN_VOID(n, "print_original_node() invalid node\n");
 	snprintf(buf, sizeof(buf), "%s%s\n", indent(indentation), n->path);
 	if (write_str(fd, buf) < 0) {
 		fprintf(stderr, "print_original_node() failure\n");	
@@ -100,15 +100,10 @@ static void print_original_node(Node *n, int8 indentation, int fd) {
 
 static Leaf *find_last_leaf_linear(Node *parent) {
 	Leaf *l;
-	CHECK_NULL(parent, "find_last_leaf() failure, invalid parent node");
-	
-	if (!parent->leaf)
-		return NULL;
+	CHECK_NULL_RETURN_NULL(parent, "find_last_leaf() failure, invalid parent node\n");
+	CHECK_NULL_RETURN_NULL(parent->leaf, "Parent has no leaf\n");
 	for (l = parent->leaf; l->sibling; l = l->sibling);
-	if (!l) {
-		fprintf(stderr, "find_last_leaf() failure, invalid leaf found\n");
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(l, "find_last_leaf() failure, invalid leaf\n");
 	return l;
 }
 
@@ -154,17 +149,13 @@ Node *find_node_by_hash(char *key) {
 
 static Node *find_last_child_node_linear(Node *parent) {
 	Node *n;
-	CHECK_NULL(parent, "find_last_child_node() failure, invalid parent node");
+	CHECK_NULL_RETURN_NULL(parent, "find_last_child_node() failure, invalid parent node\n");
 	n = parent->child;
-	if (!n) {
-		return NULL;	
-	}
+	CHECK_NULL_RETURN_NULL(n, "Parent has no child node\n");
 	while (n->sibling) {
 		n = n->sibling;
 	}
-	if (!n) {
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(n, "find_last_child_node() failure, invalid node\n");
 	return n;
 }
 
@@ -182,7 +173,7 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	Leaf *l, *first;
 	const int truncate_limit = 50;
-	if (!n) return;
+	CHECK_NULL_RETURN_VOID(n, "print_leaves_of_node() invalid node\n");
 	if (n->leaf) {
 		first = n->leaf;
 		for (l = first; l; l = l->sibling) {
@@ -219,17 +210,14 @@ static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 }
 
 static void print_node_and_leaves(Node *n, int8 indentation, int fd) {
-	if (!n) return;
+	CHECK_NULL_RETURN_VOID(n, "print_node_and_leaves() invalid n\n");
 	print_original_node(n, indentation, fd);
 	print_leaves_of_node(n, indentation, fd);
 
 }
 
 void print_tree(int fd, Node *root) {
-	if (!root) {
-		fprintf(stderr, "print_tree() failure, invalid root\n");
-		return;
-	}
+	CHECK_NULL_RETURN_VOID(root, "print_tree() failure, invalid root\n");
 	Node *stack[256];
 	Node *used_stack[256];
 	int used_stack_count = 0;
@@ -273,10 +261,7 @@ void print_tree(int fd, Node *root) {
 static void add_node_to_table(Node *node) {
 	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
 	NodeHashEntry *entry = alloc_shared(sizeof(NodeHashEntry));
-	if (!entry) {
-		fprintf(stderr, "add_node_to_table() malloc failure\n");
-		return;
-	}
+	CHECK_NULL_RETURN_VOID(entry, "add_node_to_table() malloc failure\n");
 	zero((void*)entry, (size_t)sizeof(NodeHashEntry));
 	strncpy(entry->key, node->key, MAX_KEY_LEN);
 	entry->node = node;
@@ -291,10 +276,7 @@ static void add_node_to_table(Node *node) {
 static void add_user_to_table(User *user, int increment_count) {
 	uint32_t index = HASH_KEY(user->username, MAX_USERS);
 	UserHashEntry *entry = alloc_shared(sizeof(UserHashEntry));
-	if (!entry) {
-		fprintf(stderr, "add_user_to_table() malloc falure\n");
-		return;
-	}
+	CHECK_NULL_RETURN_VOID(entry, "add_user_to_table() malloc failure\n");
 	zero((void *)entry, sizeof(UserHashEntry));
 	entry->user = user;
 	strncpy(entry->key, user->username, MAX_KEY_LEN);
@@ -319,7 +301,7 @@ User *create_admin_user() {
 		if (!admin) {
 			fprintf(stderr, "create_admin_user() failed to create admin user\n");
 		} else {
-			fprintf(stderr, "Admin user '%s' successfully created\n", admin->username);
+			fprintf(stdout, "Admin user '%s' successfully created\n", admin->username);
 			return admin;
 		}
 	}
@@ -328,7 +310,7 @@ User *create_admin_user() {
 
 Node *create_root_node() {
 	Node *root = alloc_shared(sizeof(Node));
-	CHECK_NULL(root, "Failed to allocate root");
+	CHECK_NULL_RETURN_NULL(root, "Failed to allocate root\n");
 	zero((void *)root, sizeof(Node));
 	root->parent = NULL;
 	root->sibling = NULL;
@@ -344,10 +326,10 @@ Node *create_root_node() {
 Node *create_new_node(Node *parent, char *name) {
 	Node *new, *last;
 	size_t size;
-	CHECK_NULL(parent, "create_new_node() failure, invalid parent node");
+	CHECK_NULL_RETURN_NULL(parent, "create_new_node() failure, invalid parent node\n");
 	size = sizeof(Node);
 	new = alloc_shared(size);
-	CHECK_NULL(new, "create_new_node() malloc failure");
+	CHECK_NULL_RETURN_NULL(new, "create_new_node() malloc failure\n");
 	zero((void *)new, size);
 	char temp_path[MAX_PATH_LEN];
 	size_t parent_len = strlen(parent->path);
@@ -370,7 +352,7 @@ Node *create_new_node(Node *parent, char *name) {
 	CONCAT_PATH(temp_path, parent->path, name, MAX_PATH_LEN); 
 	strncpy(new->key, name, MAX_KEY_LEN - 1);
 	strncpy(new->path, temp_path, MAX_PATH_LEN - 1);
-	fprintf(stderr, "New node path: %s\n", new->path);	
+	fprintf(stdout, "New node path: %s\n", new->path);	
 	add_node_to_table(new);
 	mem_control->dirty = 1;
 	return new;
@@ -379,10 +361,7 @@ Node *create_new_node(Node *parent, char *name) {
 static void add_leaf_to_table(Leaf *leaf) {	
 	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
 	LeafHashEntry *entry = alloc_shared(sizeof(LeafHashEntry));
-	if (!entry) {
-		fprintf(stderr, "add_leaf_to_table() malloc failure\n");
-		return;
-	}
+	CHECK_NULL_RETURN_VOID(entry, "add_leaf_to_table() malloc failure\n");
 	zero((void *)entry, (size_t)sizeof(LeafHashEntry));
 	strncpy(entry->key, leaf->key, MAX_KEY_LEN);
 	entry->leaf = leaf;
@@ -396,7 +375,7 @@ static void add_leaf_to_table(Leaf *leaf) {
 
 static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	Leaf *check, *last;
-	CHECK_NULL(parent, "create_new_leaf() failure, invalid parent node");
+	CHECK_NULL_RETURN_NULL(parent, "create_new_leaf() failure, invalid parent node\n");
 	check = find_leaf_by_hash(key);
 	if (check) {
 		fprintf(stderr, "Name already exits\n");
@@ -404,7 +383,7 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 	}
 	last = find_last_leaf_linear(parent);
 	Leaf *new = alloc_shared(sizeof(Leaf));
-	CHECK_NULL(new, "create_leaf_prototype() malloc failure\n");
+	CHECK_NULL_RETURN_NULL(new, "create_leaf_prototype() malloc failure\n");
 	zero((void *)new, sizeof(new));
 	if (last) {
 		last->sibling = new;
@@ -423,12 +402,10 @@ static Leaf *create_new_leaf_prototype(Node *parent, char *key) {
 Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);	
-	if (!new) {
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(new, "create_new_leaf() prototype failure\n");
 	new->type = VALUE_STRING;
 	new->value.string = alloc_shared(count);
-	CHECK_NULL(new->value.string, "create_new_leaf() malloc failed\n");
+	CHECK_NULL_RETURN_NULL(new->value.string, "create_new_leaf() malloc failed\n");
 	strncpy(new->value.string, value, count);
 	add_leaf_to_table(new);
 	return new;
@@ -437,9 +414,7 @@ Leaf *create_new_leaf_string(Node *parent, char *key, char *value, size_t count)
 Leaf *create_new_leaf_int(Node *parent, char *key, int32_t value) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
-	if (!new) {
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(new, "create_new_leaf() prototype failure\n");
 	new->type = VALUE_INT;
 	new->value.integer = value;
 	add_leaf_to_table(new);
@@ -449,18 +424,16 @@ Leaf *create_new_leaf_int(Node *parent, char *key, int32_t value) {
 Leaf *create_new_leaf_binary(Node *parent, char *key, void *data, size_t size) {
 	Leaf *new;
 	new = create_new_leaf_prototype(parent, key);
-	if (!new) {
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(new, "create_new_leaf() prototype failure\n");
 	new->type = VALUE_BINARY;
 	uLongf compressed_size = compressBound(size);
 	void *compressed_data = alloc_shared(compressed_size);
-	CHECK_NULL(compressed_data, "create_leaf_binary() alloc_shared failure\n");
+	CHECK_NULL_RETURN_NULL(compressed_data, "create_leaf_binary() alloc_shared failure\n");
 	if (compress(compressed_data, &compressed_size, data, size) != Z_OK) {
 		fprintf(stderr, "create_leaf_binary() compression failed\n");
 		return NULL;
 	}
-	fprintf(stderr, "create_leaf_binary: key=%s, original size=%zu bytes, compressed size=%zu bytes\n", key, size, compressed_size);
+	fprintf(stdout, "create_leaf_binary: key=%s, original size=%zu bytes, compressed size=%zu bytes\n", key, size, compressed_size);
 
 	new->value.binary.data = compressed_data;
 	new->value.binary.size = compressed_size;
@@ -506,10 +479,7 @@ User *create_new_user(const char *username, const char *password) {
 		return NULL;
 	}	
 	User *user = alloc_shared(sizeof(User));
-	if (!user) {
-		fprintf(stderr, "create_new_user: Malloc failed\n");
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(user, "create_new_user() malloc failed\n");
 	zero((void *)user, sizeof(User));
 	strncpy(user->username, username, MAX_USERNAME_LEN - 1);
 	SHA256((const unsigned char *)password, strlen(password), user->password_hash);
@@ -517,7 +487,7 @@ User *create_new_user(const char *username, const char *password) {
 	MUTEX_LOCK;
 	mem_control->dirty = 1;
 	MUTEX_UNLOCK;
-	fprintf(stderr, "User %s added\n", username);
+	fprintf(stdout, "User %s added\n", username);
 	return user;
 }
 
@@ -541,7 +511,7 @@ void mark_user_logged_in(User *user) {
 
 void mark_user_logged_out(User *user) {
 	user->logged_in = 0;
-	fprintf(stderr, "User %s logged out\n", user->username);
+	fprintf(stdout, "User %s logged out\n", user->username);
 	return;
 }
 
@@ -558,7 +528,7 @@ int verify_user(const char *username, const char *password) {
 			fprintf(stderr, "User %s already logged in\n", username);
 			return 3;
 		}
-		fprintf(stderr, "User %s found and verified\n", username);
+		fprintf(stdout, "User %s found and verified\n", username);
 		return 0;
 	}
 	fprintf(stderr, "Verify_user: Password mismatch\n");
@@ -694,7 +664,7 @@ void print_leaf(int cli_fd, Leaf *l) {
 }
 
 void free_user(User *user) {
-	if (!user) return;
+	CHECK_NULL_RETURN_VOID(user, "free_user() invalid user\n");
 	uint32_t index = HASH_KEY(user->username, MAX_USERS);
 	MUTEX_LOCK;
 	UserHashEntry *entry = mem_control->user_hash_table[index];
@@ -718,7 +688,7 @@ void free_user(User *user) {
 }
 
 void free_leaf(Leaf *leaf) {
-	if (!leaf) return;
+	CHECK_NULL_RETURN_VOID(leaf, "free_leaf() invalid leaf\n");
 	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
 	MUTEX_LOCK;
 	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
@@ -741,7 +711,7 @@ void free_leaf(Leaf *leaf) {
 }
 
 void free_node(Node *node) {
-	if (!node) return;
+	CHECK_NULL_RETURN_VOID(node, "free_node() invalid node\n");
 	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
 	MUTEX_LOCK;
 	NodeHashEntry *entry = mem_control->node_hash_table[index];
@@ -1008,10 +978,7 @@ Node *load_node(FILE *f, Node *parent) {
 	}
 
 	Node *node = alloc_shared(sizeof(Node));
-	if (!node) {
-		fprintf(stderr, "load_node() alloc shared failed\n");
-		return NULL;
-	}
+	CHECK_NULL_RETURN_NULL(node, "load_node() alloc shared failure\n");
 	zero((void *)node, sizeof(Node));
 	node->parent = parent;
 	size_t path_len;
@@ -1033,10 +1000,7 @@ Node *load_node(FILE *f, Node *parent) {
 	Leaf *prev_leaf = NULL;
 	for (uint32_t i = 0; i < leaf_count; i++) {
 		Leaf *leaf = alloc_shared(sizeof(Leaf));
-		if (!leaf) {
-			fprintf(stderr, "load_node() alloc shared leaf failed\n");
-			return NULL;
-		}
+		CHECK_NULL_RETURN_NULL(leaf, "load_node() alloc shared leaf failure\n");
 		zero((void *)leaf, sizeof(Leaf));
 		leaf->parent = node;
 		size_t leaf_key_len;
@@ -1099,7 +1063,7 @@ int load_database(const char *filename) {
 		fprintf(stderr, "No existing database or open failed\n");
 		return 1;
 	}
-	fprintf(stderr, "Database found. Initializing...\n");
+	fprintf(stdout, "Database found. Initializing...\n");
 	
 	MUTEX_LOCK;
 	if (fread(&mem_control->user_count, sizeof(size_t), 1, f) != 1) {
@@ -1135,7 +1099,7 @@ int load_database(const char *filename) {
 	MUTEX_LOCK;
 	mem_control->root = root;
 	MUTEX_UNLOCK;
-	fprintf(stderr, "Successfully loaded saved database from %s\n", filename);
+	fprintf(stdout, "Successfully loaded saved database from %s\n", filename);
 	fclose(f);
 	return 0;
 }
@@ -1152,7 +1116,7 @@ void verify_database(const char *filename) {
 		fclose(f);
 		return;
 	}
-	fprintf(stderr, "User count: %zu\n", user_count);
+	fprintf(stdout, "User count: %zu\n", user_count);
 	for (size_t i = 0; i < user_count; i++) {
 		User user;
 		if (fread(&user, sizeof(User), 1, f) != 1) {
@@ -1160,15 +1124,15 @@ void verify_database(const char *filename) {
 		    fclose(f);
 		    return;
 		}
-		fprintf(stderr, "User %zu: username=%s, logged_in=%ld\n", i, user.username, user.logged_in);
-		fprintf(stderr, "Password hash: ");
+		fprintf(stdout, "User %zu: username=%s, logged_in=%ld\n", i, user.username, user.logged_in);
+		fprintf(stdout, "Password hash: ");
 		for (int j = 0; j < SHA256_DIGEST_LENGTH; j++) {
-		    fprintf(stderr, "%02x", user.password_hash[j]);
+		    fprintf(stdout, "%02x", user.password_hash[j]);
 		}
-		fprintf(stderr, "\n");
+		fprintf(stdout, "\n");
 	}
 
-	fprintf(stderr, "Node tree:\n");
+	fprintf(stdout, "Node tree:\n");
 	while (!feof(f)) {
 		uint32_t child_count, sibling_count, leaf_count;
 		if (fread(&child_count, sizeof(uint32_t), 1, f) != 1) {
@@ -1178,7 +1142,7 @@ void verify_database(const char *filename) {
 		    return;
 		}
 		if (child_count == 0xFFFFFFFF) {
-		    fprintf(stderr, "(null node)\n");
+		    fprintf(stdout, "(null node)\n");
 		    continue;
 		}
 		if (fread(&sibling_count, sizeof(uint32_t), 1, f) != 1 ||
@@ -1203,7 +1167,7 @@ void verify_database(const char *filename) {
 		}
 		path[path_len - 1] = '\0';
 		node_key[node_key_len - 1] = '\0';
-		fprintf(stderr, "Node: path=%s, key=%s, children=%u, siblings=%u, leaves=%u\n", path, node_key, child_count, sibling_count, leaf_count);
+		fprintf(stdout, "Node: path=%s, key=%s, children=%u, siblings=%u, leaves=%u\n", path, node_key, child_count, sibling_count, leaf_count);
         
 		for (uint32_t i = 0; i < leaf_count; i++) {
 		    size_t key_len;
@@ -1218,7 +1182,7 @@ void verify_database(const char *filename) {
 			return;
 		    }
 		    key[key_len - 1] = '\0';
-		    fprintf(stderr, "  Leaf: key=%s, type=", key);
+		    fprintf(stdout, "  Leaf: key=%s, type=", key);
 		    switch (type) {
 			case VALUE_STRING:
 			    {
@@ -1236,7 +1200,7 @@ void verify_database(const char *filename) {
                             return;
                         }
                         value[value_len - 1] = '\0';
-                        fprintf(stderr, "STRING, value=%s\n", value);
+                        fprintf(stdout, "STRING, value=%s\n", value);
                         free(value);
                     }
                     break;
@@ -1248,7 +1212,7 @@ void verify_database(const char *filename) {
                             fclose(f);
                             return;
                         }
-                        fprintf(stderr, "INT, value=%d\n", value);
+                        fprintf(stdout, "INT, value=%d\n", value);
                     }
                     break;
                 case VALUE_BINARY:
@@ -1266,7 +1230,7 @@ void verify_database(const char *filename) {
                             fclose(f);
                             return;
                         }
-                        fprintf(stderr, "BINARY, size=%zu, compressed=%d\n", size, compressed);
+                        fprintf(stdout, "BINARY, size=%zu, compressed=%d\n", size, compressed);
                     }
                     break;
             }
@@ -1285,12 +1249,12 @@ int init_saved_database(void) {
 void cleanup_database(void) {
 	MUTEX_LOCK;
 	if (mem_control->dirty == 1) {
-		fprintf(stderr, "Database change detected, saving...\n");
+		fprintf(stdout, "Database change detected, saving...\n");
 		MUTEX_UNLOCK;
 		save_database("database.dat");
 		MUTEX_LOCK;
 	} else {
-		fprintf(stderr, "Database unchanged\n");
+		fprintf(stdout, "Database unchanged\n");
 	}
 	mem_control->active_connections = 0;
 	MUTEX_UNLOCK;
@@ -1314,7 +1278,7 @@ void cleanup_database(void) {
 		munmap(mem_control, sizeof(SharedMemControl));
 		mem_control = NULL;
 	}
-	fprintf(stderr, "Finished cleaning and freeing resources\n");
+	fprintf(stdout, "Finished cleaning and freeing resources\n");
 	return;
 }
 

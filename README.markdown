@@ -69,7 +69,7 @@ sudo apt install build-essential libz-dev libssl-dev
 
 ## Testing (Sample run)
 
-Open up a separate bash window, run the test run and review all responses and outputs to test-output.txt (This test assumes you are running on port 8080, modify in file if needed)
+Open up a separate bash window, run the test run and review all responses and outputs to test-output.txt (This test assumes you are running on port 8000, modify in file if needed)
 
 ````bash
 sudo chmod -x test_nexus.sh

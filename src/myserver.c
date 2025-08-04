@@ -13,7 +13,7 @@ static int stored_age = 30;
 
 void sigint_handler(int sig) {
 	(void)sig;
-	fprintf(stderr, "SIGINT signal received\n");
+	fprintf(stdout, "SIGINT signal received\n");
 	keep_running = 0;
 }
 
@@ -281,7 +281,7 @@ int send_file(int cli_fd, const char *mime_type, File *file) {
 		}
 		header_sent += x;
 	}
-	/* fprintf(stderr, "Streaming file %s (%lld bytes)\n", file->file_name, (long long)file->size); */
+	/* fprintf(stdout, "Streaming file %s (%lld bytes)\n", file->file_name, (long long)file->size); */
 	while (remaining > 0) {
 		size_t to_read = (remaining < sizeof(buf)) ? remaining : sizeof(buf);
 		ssize_t n = read(file->fd, buf, to_read);
@@ -301,7 +301,7 @@ int send_file(int cli_fd, const char *mime_type, File *file) {
 			sent += x;
 		}
 		remaining -= n;
-		/* fprintf(stderr, "Sent %zu bytes, %lld remaining\n", n, (long long)remaining); */
+		/* fprintf(stdout, "Sent %zu bytes, %lld remaining\n", n, (long long)remaining); */
 	}
 	close(file->fd);
 	free(file);
@@ -433,7 +433,7 @@ int cli_connection(int cli_fd) {
 	}
 
 	else if (!strcmp(req->method, "GET") && !strncmp(req->url, "/static/", 8)) {	
-		fprintf(stderr, "Serving static file: %s\n", req->url);
+		fprintf(stdout, "Serving static file: %s\n", req->url);
 	
 		memset(file_url, 0, sizeof(file_url));
 		snprintf(file_url, sizeof(file_url) - 1, "%s", req->url + 1);
@@ -454,7 +454,7 @@ int cli_connection(int cli_fd) {
 				fprintf(stderr, "%s\n", error);
 		} else {
 			char *mime_type = get_mime_type(req->url);
-			fprintf(stderr, "Serving file %s with MIME type %s\n", file_url, mime_type);
+			fprintf(stdout, "Serving file %s with MIME type %s\n", file_url, mime_type);
 			
 			if (!send_file(cli_fd, mime_type, f)) {
 				if (!http_headers(cli_fd, 500))

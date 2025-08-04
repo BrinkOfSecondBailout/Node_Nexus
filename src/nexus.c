@@ -1,4 +1,6 @@
 /* nexus.c */
+
+// #define DEBUG
 #include "nexus.h"
 
 Node *curr_node = NULL;
@@ -31,14 +33,14 @@ Command_Handler c_handlers[] = {
 };
 
 void print_cli(Client *client) {
-	fprintf(stderr, "Client: %s\n", client->username);
+	fprintf(stdout, "Client: %s\n", client->username);
 }
 
 void print_all_logged_in_cli() {
 	ClientHashEntry *entry;
 	Client *client;
 	MUTEX_LOCK;
-	fprintf(stderr, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
+	fprintf(stdout, "Total logged in clients: %ld\n", mem_control->logged_in_client_count);
 	for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
 		entry = mem_control->logged_in_clients[i];
 		while (entry != NULL) {
@@ -107,7 +109,7 @@ int remove_logged_in_cli(Client *cli) {
 				mem_control->logged_in_clients[index] = entry->next;
 			}
 			mem_control->logged_in_client_count--;
-			fprintf(stderr, "Successfully removed logged in client\n");
+			fprintf(stdout, "Successfully removed logged in client\n");
 			MUTEX_UNLOCK;
 			return 0;
 		}
@@ -782,7 +784,7 @@ int32 boot_handle(Client *cli, char *username, char *unused) {
 int32 boot_all_handle(Client *cli, char *unused1, char *unused2) {
 	if (verify_admin(cli)) return 1;
 	logout_all_clients();
-	fprintf(stderr, "All logged in users booted\n");
+	fprintf(stdout, "All logged in users booted\n");
 	dprintf(cli->s, "All logged in users booted\n");
 	return 0;
 }
@@ -795,9 +797,9 @@ int32 exit_handle(Client *cli, char *folder, char *args) {
 			fprintf(stderr, "Invalid user, force logout unsuccessful\n");
 			return 1;
 		}
-		fprintf(stderr, "Force logout successful\n");
+		fprintf(stdout, "Force logout successful\n");
 	}
-	fprintf(stderr, "Client exited at %d\n", getpid());
+	fprintf(stdout, "Client exited at %d\n", getpid());
 	return 0;
 }
 
@@ -831,7 +833,7 @@ void child_loop(Client *cli) {
 		return;
 	}
 	char buf[256], cmd[256], folder[256], args[256];
-	fprintf(stderr, "child_loop: Client process id=%d\n", getpid());
+	fprintf(stdout, "child_loop: Client process id=%d\n", getpid());
 	while (keep_running_child) {
 		zero_multiple(buf, cmd, folder, args, NULL);
 		ssize_t n = read(cli->s, buf, 255);
@@ -861,7 +863,7 @@ void child_loop(Client *cli) {
 				strncpy(args, p, sizeof(args) - 1);
 			}
 		}
-		fprintf(stderr, "%s %s %s\n", cmd, folder, args);
+		fprintf(stdout, "%s %s %s\n", cmd, folder, args);
 		Callback cb = get_command((int8 *)cmd);
 		if (!cb) {
 			dprintf(cli->s, "400 Command not found: %s\n", cmd);
@@ -870,12 +872,12 @@ void child_loop(Client *cli) {
 		cb(cli, folder, args);
 	}
 	// Cleanup
-	fprintf(stderr, "Exiting child_loop for pid=%d\n", getpid());
+	fprintf(stdout, "Exiting child_loop for pid=%d\n", getpid());
 	if (cli->logged_in == 1) {
 		if (complete_client_logout(cli)) {
 			fprintf(stderr, "Invalid user %s, force logout unsuccessful\n", cli->username);
 		}
-		fprintf(stderr, "Client force logout successful\n");
+		fprintf(stdout, "Client force logout successful\n");
 	}
 	close(cli->s);
 }
@@ -918,7 +920,7 @@ int cli_accept_cli(Client *client, int serv_fd) {
 	
 	cli_port = (int16)htons((int)cli_addr.sin_port);
 	cli_ip = inet_ntoa(cli_addr.sin_addr);
-	fprintf(stderr, "Connection from %s:%d\n", cli_ip, cli_port);
+	fprintf(stdout, "Connection from %s:%d\n", cli_ip, cli_port);
 
 	client->s = cli_fd;
 	client->port = cli_port;
@@ -929,6 +931,7 @@ int cli_accept_cli(Client *client, int serv_fd) {
 int start_nexus_app(int serv_fd) {
 	int cli_fd;
 	Client *client;
+	//fprintf(stdout, "PID: %d\n", getpid());
 	while (keep_running) {
 		client = build_client_struct();
 		if (!client) continue;
@@ -938,7 +941,7 @@ int start_nexus_app(int serv_fd) {
 			fprintf(stderr, "start_cli_app() failure\n");
 			continue;
 		}
-		fprintf(stderr, "Incoming connection (%ld/%d)\n", mem_control->active_connections, MAX_CONNECTIONS);
+		fprintf(stdout, "Incoming connection (%ld/%d)\n", mem_control->active_connections, MAX_CONNECTIONS);
 
 		if (!fork()) {
 			close(serv_fd);
@@ -958,7 +961,7 @@ int start_nexus_app(int serv_fd) {
 		}
 		close(cli_fd);
 	}
-	fprintf(stderr, "Shutting down Node Nexus\n");			
+	fprintf(stdout, "Shutting down Node Nexus\n");			
 	return 0;
 }
 
@@ -1009,9 +1012,11 @@ int init_root() {
 
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
+	#ifdef DEBUG
 	verify_database("database.dat");
+	#endif
 	if (init_saved_database()) {
-		fprintf(stderr, "Initializing new database\n");
+		fprintf(stdout, "Initializing new database\n");
 		if (init_root()) return 1;
 		create_admin_user();
 	}
@@ -1030,7 +1035,7 @@ int main(int argc, char *argv[]) {
 	logout_all_clients();
 	cleanup_database();
 	base64_cleanup();
-	fprintf(stderr, "Exiting program...\n");
+	fprintf(stdout, "Exiting program.. GOODBYE\n");
 	return 0;
 }
 
