@@ -101,7 +101,7 @@ static void print_original_node(Node *n, int8 indentation, int fd) {
 static Leaf *find_last_leaf_linear(Node *parent) {
 	Leaf *l;
 	CHECK_NULL_RETURN_NULL(parent, "find_last_leaf() failure, invalid parent node\n");
-	CHECK_NULL_RETURN_NULL(parent->leaf, "Parent has no leaf\n");
+	CHECK_NULL_RETURN_NULL(parent->leaf, "Parent %s has no leaf\n", parent->key);
 	for (l = parent->leaf; l->sibling; l = l->sibling);
 	CHECK_NULL_RETURN_NULL(l, "find_last_leaf() failure, invalid leaf\n");
 	return l;
@@ -151,7 +151,7 @@ static Node *find_last_child_node_linear(Node *parent) {
 	Node *n;
 	CHECK_NULL_RETURN_NULL(parent, "find_last_child_node() failure, invalid parent node\n");
 	n = parent->child;
-	CHECK_NULL_RETURN_NULL(n, "Parent has no child node\n");
+	CHECK_NULL_RETURN_NULL(n, "Parent %s has no child node\n", parent->key);
 	while (n->sibling) {
 		n = n->sibling;
 	}
@@ -663,8 +663,8 @@ void print_leaf(int cli_fd, Leaf *l) {
 	return;
 }
 
-void free_user(User *user) {
-	CHECK_NULL_RETURN_VOID(user, "free_user() invalid user\n");
+void unlink_user_from_table(User *user) {
+	CHECK_NULL_RETURN_VOID(user, "unlink_user_from_table() invalid user\n");
 	uint32_t index = HASH_KEY(user->username, MAX_USERS);
 	MUTEX_LOCK;
 	UserHashEntry *entry = mem_control->user_hash_table[index];
@@ -687,8 +687,8 @@ void free_user(User *user) {
 	return;
 }
 
-void free_leaf(Leaf *leaf) {
-	CHECK_NULL_RETURN_VOID(leaf, "free_leaf() invalid leaf\n");
+void unlink_leaf_from_table(Leaf *leaf) {
+	CHECK_NULL_RETURN_VOID(leaf, "unlink_leaf_from_table() invalid leaf\n");
 	uint32_t index = HASH_KEY(leaf->key, LEAF_HASH_TABLE_SIZE);
 	MUTEX_LOCK;
 	LeafHashEntry *entry = mem_control->leaf_hash_table[index];
@@ -710,8 +710,8 @@ void free_leaf(Leaf *leaf) {
 	return;
 }
 
-void free_node(Node *node) {
-	CHECK_NULL_RETURN_VOID(node, "free_node() invalid node\n");
+void unlink_node_from_table(Node *node) {
+	CHECK_NULL_RETURN_VOID(node, "unlink_node_from_table() invalid node\n");
 	uint32_t index = HASH_KEY(node->key, NODE_HASH_TABLE_SIZE);
 	MUTEX_LOCK;
 	NodeHashEntry *entry = mem_control->node_hash_table[index];
@@ -733,13 +733,13 @@ void free_node(Node *node) {
 	while (leaf) {
 		Leaf *next = leaf->sibling;
 		MUTEX_UNLOCK;
-		free_leaf(leaf);
+		unlink_leaf_from_table(leaf);
 		MUTEX_LOCK;
 		leaf = next;
 	}
 	if (node->child) {
 		MUTEX_UNLOCK;
-		free_node(node->child);
+		unlink_node_from_table(node->child);
 		MUTEX_LOCK;
 	}
 	MUTEX_UNLOCK;
@@ -748,7 +748,7 @@ void free_node(Node *node) {
 
 
 int delete_user(User *user) {
-	free_user(user);	
+	unlink_user_from_table(user);	
 	return 0;
 }
 
@@ -772,7 +772,7 @@ int delete_node(Node *node) {
 					parent->child = NULL;
 				}
 			}
-			free_node(first);
+			unlink_node_from_table(first);
 			MUTEX_LOCK;
 			mem_control->dirty = 1;
 			MUTEX_UNLOCK;
@@ -811,7 +811,7 @@ int delete_leaf(char *name) {
 					parent->leaf = NULL;
 				}
 			}
-			free_leaf(first);
+			unlink_leaf_from_table(first);
 			MUTEX_LOCK;
 			mem_control->dirty = 1;
 			MUTEX_UNLOCK;
@@ -828,7 +828,7 @@ int delete_leaf(char *name) {
 void init_database() {
 	MUTEX_LOCK;
 	if (mem_control->root) {
-		free_node(root);
+		unlink_node_from_table(root);
 		root = NULL;
 	}
 	MUTEX_UNLOCK;
@@ -846,7 +846,7 @@ void init_database() {
 
 void reset_database() {
 	if (mem_control->root) {
-		free_node(root);
+		unlink_node_from_table(root);
 		root = NULL;	
 	}
 	node_hash_table_init();
@@ -1259,7 +1259,7 @@ void cleanup_database(void) {
 	mem_control->active_connections = 0;
 	MUTEX_UNLOCK;
 	if (mem_control->root) {
-		free_node(mem_control->root);
+		unlink_node_from_table(mem_control->root);
 		root = NULL;
 	}
 	if (mem_control) {
