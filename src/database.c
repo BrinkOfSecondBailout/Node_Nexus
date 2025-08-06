@@ -172,7 +172,7 @@ static int is_node_in_stack(Node *node, Node **stack, int stack_count) {
 static void print_leaves_of_node(Node *n, int8 indentation, int fd) {
 	char buf[512];
 	Leaf *l, *first;
-	const int truncate_limit = 50;
+	const int truncate_limit = 20;
 	CHECK_NULL_RETURN_VOID(n, "print_leaves_of_node() invalid node\n");
 	if (n->leaf) {
 		first = n->leaf;

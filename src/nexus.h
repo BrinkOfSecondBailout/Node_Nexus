@@ -48,6 +48,7 @@ struct s_command_handler {
 int32 help_handle(Client *, char *, char *);
 int32 register_handle(Client *, char *, char *);
 int32 login_handle(Client *, char *, char *);
+int32 change_username_handle(Client *, char *, char *);
 int32 change_pw_handle(Client *, char *, char *);
 int32 users_handle(Client *, char *, char *);
 int32 logout_handle(Client *, char *, char *);

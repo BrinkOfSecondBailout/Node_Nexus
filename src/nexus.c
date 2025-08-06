@@ -1,6 +1,6 @@
 /* nexus.c */
 
-// #define DEBUG
+// #define VERIFY_DATABASE
 #include "nexus.h"
 
 Node *curr_node = NULL;
@@ -1012,7 +1012,7 @@ int init_root() {
 
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
-	#ifdef DEBUG
+	#ifdef VERIFY_DATABASE
 	verify_database("database.dat");
 	#endif
 	if (init_saved_database()) {

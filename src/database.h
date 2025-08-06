@@ -34,7 +34,7 @@
 #define MAX_USERS 20
 #define MAX_PASSWORD_LEN 40
 
-#define PRINT_CHECK			fprintf(stderr, "CHECK_POINT\n")
+#define PRINT_CHECK			fprintf(stderr, "**CHECK_POINT**\n")
 #define MUTEX_LOCK			pthread_mutex_lock(&mem_control->mutex)
 #define MUTEX_UNLOCK			pthread_mutex_unlock(&mem_control->mutex)
 
@@ -201,6 +201,7 @@ Leaf *create_new_leaf_binary(Node *, char *, void *, size_t);
 User *create_new_user(const char *, const char *);
 User *find_user(const char *);
 int delete_user(User *);
+int change_user_username(User *, const char *);
 int change_user_password(User *, const char *);
 void mark_user_logged_in(User *);
 void mark_user_logged_out(User *);
