@@ -35,7 +35,7 @@ int server_init(const char *bind_addr, int port_number) {
 		return 0;
 	}
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = inet_addr(bind_addr);
+	addr.sin_addr.s_addr = INADDR_ANY;
 	if (addr.sin_addr.s_addr == INADDR_NONE) {
 		error = "Invalid bind address";
 		close(serv_fd);
