@@ -1012,6 +1012,9 @@ int init_root() {
 
 int main(int argc, char *argv[]) {
 	if (init_mem_control()) return 1;
+	#ifdef VERIFY_DATABASE
+	verify_database("database.dat");
+	#endif
 	if (init_saved_database()) {
 		fprintf(stdout, "Initializing new database\n");
 		if (init_root()) return 1;
@@ -1032,9 +1035,6 @@ int main(int argc, char *argv[]) {
 	logout_all_clients();
 	cleanup_database();
 	base64_cleanup();
-	#ifdef VERIFY_DATABASE
-	verify_database("database.dat");
-	#endif
 	fprintf(stdout, "Exiting program.. GOODBYE\n");
 	return 0;
 }

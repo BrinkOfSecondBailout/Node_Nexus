@@ -36,6 +36,8 @@ fi
     sleep 0.5
     echo "curr"
     sleep 0.5
+    echo "root"
+    sleep 0.5
     echo "newdir users"
     sleep 0.5
     echo "addfile users users_log -s"
