@@ -17,6 +17,12 @@ void sigint_handler(int sig) {
 	keep_running = 0;
 }
 
+void sigterm_handler(int sig) {
+	(void)sig;
+	fprintf(stdout, "SIGTERM signal received\n");
+	keep_running = 0;
+}
+
 int server_init(const char *bind_addr, int port_number) {
 	int serv_fd;
 	struct sockaddr_in addr;
@@ -620,6 +626,7 @@ int close_server(int serv_fd) {
 int start_server(const char *bind_addr, int port) {
 	int serv_fd;
 	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = sigint_handler;
 	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
@@ -627,7 +634,12 @@ int start_server(const char *bind_addr, int port) {
 		fprintf(stderr, "Failed to set SIGINT handler: %s\n", strerror(errno));
 		return -1;
 	}
-
+	sa.sa_handler = sigterm_handler;
+	if (sigaction(SIGTERM, &sa, NULL) == -1) {
+		fprintf(stderr, "Failed to set SIGTERM handler: %s\n", strerror(errno));
+		return -1;
+	}
+	
 	serv_fd = server_init(bind_addr, port);
 	if (serv_fd <= 0) {
 		fprintf(stderr, "Server initialization failed: %s\n", error);
