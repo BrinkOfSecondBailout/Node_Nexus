@@ -633,7 +633,7 @@ int start_server(const char *bind_addr, int port) {
 		fprintf(stderr, "Server initialization failed: %s\n", error);
 		return -1;	
 	}
-	printf("Listening on %s:%d\n", bind_addr, port);
+	printf("Listening on port: %d\n", port);
 	return serv_fd;
 }
 
