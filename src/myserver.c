@@ -11,16 +11,11 @@ char *error;
 static char stored_name[256] = "John Doe";
 static int stored_age = 30;
 
-void sigint_handler(int sig) {
-	(void)sig;
-	fprintf(stdout, "SIGINT signal received\n");
-	keep_running = 0;
-}
-
-void sigterm_handler(int sig) {
-	(void)sig;
-	fprintf(stdout, "SIGTERM signal received\n");
-	keep_running = 0;
+void signal_handler(int signum) {
+	if (signum == SIGINT || signum == SIGTERM) {
+		fprintf(stdout, "Signal received for graceful shutdown...\n");
+		keep_running = 0;
+	}
 }
 
 int server_init(const char *bind_addr, int port_number) {
@@ -627,14 +622,13 @@ int start_server(const char *bind_addr, int port) {
 	int serv_fd;
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = sigint_handler;
+	sa.sa_handler = signal_handler;
 	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
 	if (sigaction(SIGINT, &sa, NULL) == -1) {
 		fprintf(stderr, "Failed to set SIGINT handler: %s\n", strerror(errno));
 		return -1;
 	}
-	sa.sa_handler = sigterm_handler;
 	if (sigaction(SIGTERM, &sa, NULL) == -1) {
 		fprintf(stderr, "Failed to set SIGTERM handler: %s\n", strerror(errno));
 		return -1;
