@@ -24,6 +24,22 @@ Node Nexus intentionally avoids traditional databases (e.g., SQLite, PostgreSQL)
 - **Performance Optimization**: Implements a hash table for fast leaf lookups and a `dirty` flag to avoid unnecessary saves, for efficient data access and storage strategies.
 - **Thread Safety**: Ensures all database operations are protected by a mutex, avoiding undefined behaviors and crashes due to potential overlapping database changes.
 
+## Deployment on IONOS VPS
+
+Node Nexus is deployed on an IONOS Virtual Server S (2 vCPUs, 2GB RAM, 80GB SSD)Steps:
+
+**LIVE SERVER DEMO AVAILABLE UPON REQUEST**
+
+1. Provision VPS with Ubuntu 22.04.
+2. Install dependencies: `sudo apt install build-essential libz-dev libssl-dev netcat-openbsd`.
+3. Clone repo: `git clone <repo-url>`.
+4. Build: `make` or `gcc -o nexus src/*.c -lz -lcrypto -pthread`.
+5. Set `NODE_NEXUS_ADMIN_PASSWORD` and run: `./nexus 8000 &`.
+6. Test: `./test_nexus.sh` and `./test_nexus2.sh` (be sure to modify permission to execute prior).
+7. Stop VPS when idle to minimize costs.
+
+**LIVE SERVER DEMO AVAILABLE UPON REQUEST**
+
 ## Installation
 
 ### Prerequisites
