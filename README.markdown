@@ -62,13 +62,20 @@ sudo apt install build-essential libz-dev libssl-dev
    git clone https://github.com/BrinkOfSecondBailout/Node-Nexus.git
    cd node-nexus/src
    ```
-
-2. Compile the server:
+2. Check the ownership of your directory with:
+   ```bash
+   ls -ld .
+   ```
+   If ownership is root root or any other group/users that is not the logged in user, change it accordingly. For example:
+   ### This is a very important step so that the operating system can allow the program to read and write, serializing and de-serializing the database upon shutdown and startup.
+   ```bash
+   sudo chown -R dannydev:dannydev .
+   ```
+3. Compile the server:
    ```bash
    gcc -o nexus nexus.c database.c myserver.c base64.c classifier.c -lz -pthread -lcrypto -lm
    ```
-
-3. Set the admin password environment variable:
+4. Set the admin password environment variable:
    ```bash
    export NODE_NEXUS_ADMIN_PASSWORD="your_secure_password_here"
    ```
@@ -77,8 +84,7 @@ sudo apt install build-essential libz-dev libssl-dev
    echo 'export NODE_NEXUS_ADMIN_PASSWORD="your_secure_password_here"' >> ~/.bashrc
    source ~/.bashrc
    ```
-
-4. Run the server:
+5. Run the server:
    ```bash
    ./nexus [port]
    ```
