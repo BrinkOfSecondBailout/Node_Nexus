@@ -59,15 +59,15 @@ sudo apt install build-essential libz-dev libssl-dev
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/BrinkOfSecondBailout/Node-Nexus.git
+   git clone https://github.com/BrinkOfSecondBailout/Node-Nexus.git node_nexus
    cd node-nexus/src
    ```
 2. Check the ownership of your directory with:
    ```bash
    ls -ld .
    ```
-   If ownership is root root or any other group/users that is not the logged in user, change it accordingly. For example:
-   ### This is a very important step so that the operating system can allow the program to read and write, serializing and de-serializing the database upon shutdown and startup.
+   If current logged in user isn't the owner or not set to have read/write/execute permission of this directory, use this command to make the logged in user the owner:  
+   #### This is a very important step so that the operating system can allow the program to read and write, serializing and de-serializing the database upon shutdown and startup.
    ```bash
    sudo chown -R dannydev:dannydev .
    ```
