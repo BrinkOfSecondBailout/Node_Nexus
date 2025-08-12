@@ -1,5 +1,7 @@
 # Node Nexus: A Custom In-Memory Database Server
 
+![Node Nexus Thumbnail](static/img/node_nexus.png)
+
 ## Overview
 
 Node Nexus is a lightweight, socket-based server written in C that implements a custom in-memory database for managing a hierarchical file system. Designed with advanced systems programming concepts, it features user authentication, a tree-based data structure, and binary serialization for persistent storage. Instead of relying on a traditional database like SQLite, Node Nexus uses a custom in-memory database to showcase low-level memory management, thread-safe operations, and efficient binary serialization/deserialization. Multiple clients can connect to the server safely and effectively at once (up to a limit of course).
