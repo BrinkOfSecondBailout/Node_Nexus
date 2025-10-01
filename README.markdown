@@ -9,7 +9,7 @@ Node Nexus is a lightweight, socket-based server written in C that implements a 
 
 ### Demo video
 
-[Node Nexus Full Demo](https://youtu.be/qnmE9qQy6GE?si=u9TAvmIE9C-Nwq-q)
+[Node Nexus Full Demo](https://youtu.be/qnmE9qQy6GE)
 
 ### Key Features
 
